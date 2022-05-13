@@ -44,6 +44,28 @@ spec:
         params:
         - name: args
           value: ["."]
+      - name: task-usage
+        runAfter:
+          - fetch-repository
+        taskSpec:
+          workspaces:
+            - name: source
+              readOnly: true
+          steps:
+            - name: task-usage
+              image: registry.redhat.io/openshift4/ose-cli@sha256:e6b307c51374607294d1756b871d3c702251c396efdd44d4ef8db68e239339d3
+              workingDir: $(workspaces.source.path)
+              script: |
+                oc apply -k tasks/ --dry-run=client -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort > /tmp/defined-tasks
+                oc apply -k pipelines/hacbs --dry-run=client -o jsonpath='{range .items[*]}{range .spec.tasks[*]}{.taskRef.name}{"\n"}{end}' | sort -u > /tmp/used-tasks
+                DIFF=$(comm -23 /tmp/defined-tasks /tmp/used-tasks)
+                if [ -n "$DIFF" ]; then
+                  echo Unused tasks - $DIFF
+                  exit 1
+                fi
+        workspaces:
+          - name: source
+            workspace: workspace
   workspaces:
     - name: workspace
       persistentVolumeClaim:
