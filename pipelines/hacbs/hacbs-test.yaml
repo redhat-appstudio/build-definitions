@@ -62,13 +62,15 @@
     taskRef:
       name: get-clair-scan
     params:
-    - name: SHA
+    - name: image-digest
       value: $(tasks.build-container.results.IMAGE_DIGEST)
-    - name: PULLSPEC
-      value: $(params.output-image)
+    - name: image-url
+      value: $(tasks.build-container.results.IMAGE_URL)
     workspaces:
     - name: clair-ws
       workspace: workspace
+    - name: registry-auth
+      workspace: registry-auth
 - op: add
   path: /spec/finally/-
   value:

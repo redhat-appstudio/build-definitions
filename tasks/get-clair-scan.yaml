@@ -5,71 +5,42 @@ metadata:
   name: get-clair-scan
 spec:
   params:
-    - name: SHA
-      description: sha of an image
-      type: string
-    - name: PULLSPEC
-      description: image full name with a tag
-      type: string
+    - name: image-digest
+      description: Image digest to scan
+    - name: image-url
+      description: Url to image
   steps:
     - name: get-vulnerabilities
-      image: quay.io/redhat-appstudio/hacbs-test:latest
+      image: quay.io/redhat-appstudio/clair-in-ci:latest
       script: |
         #!/usr/bin/env bash
-        temp='$(params.SHA)'
-        modifiedSha=${temp//:/%3A}
 
-        #ugly safety mechanism - need to be improved in future, bleh :(
+        imagewithouttag=$(echo '$(params.image-url)' | sed "s/\(.*\):.*/\1/" | tr -d '\n')
+        # strip new-line escape symbol from parameter and save it to variable
+        imageanddigest=$(echo $imagewithouttag@'$(params.image-digest)')
 
-        function safety_mechanism {
+        [ -f /workspace/registry-auth/.dockerconfigjson ] && REGISTRY_ARGS="/workspace/registry-auth/"
 
-        #curl request
-        http_code=$(curl -o $(workspaces.clair-ws.path)/clair-result.json -w '%{http_code}' -H "Content-type: application/json" -XGET https://quay.io/api/v1/repository/$(echo '$(params.PULLSPEC)' | sed "s/\(.*\):.*/\1/" | sed "s/^[^/]*\///")/manifest/$modifiedSha/security?vulnerabilities=true)
-        scan_file=$(workspaces.clair-ws.path)/clair-result.json
+        clair-action report --image-ref=$imageanddigest --db-path=/tmp/matcher.db --format=quay --docker-config-dir=$REGISTRY_ARGS > $(workspaces.clair-ws.path)/clair-result.json
 
-        if [[ "$http_code" != "200" ]]
-        then
-          echo "Error, response code is not 200. Response code: $http_code"
-          echo "Body of response: $(cat $scan_file)"
-          rm -f $scan_file
-          exit 0
-        fi
-
-        #scan_file logic
-        if [[ ($(jq '.data' $scan_file) == null) ]]
-        then
-          retval=1
-        else
-          retval=0
-        fi
-        return $retval
-        }
-
-        retval=$(safety_mechanism)
-
-        function retry {
-          local n=0
-          local max=5
-          # TODO Clair scan time varies too much at the moment, from 10 minutes to +5 hours. Decreasing delay.
-          #local delay=60
-          local delay=0
-          while true; do
-            "$@" && [ "$retval"==0 ]  && break || {
-              if [[ $n -lt $max ]]; then
-                let n++
-                echo "Getting clair scan failed, because data were: $(jq '.data' $scan_file). Attempt $n/$max"
-                sleep $delay;
-              else
-                echo "The clair scan has status $(jq '.status' $scan_file) and was not obtained in $n attempts."
-                rm -f $scan_file
-                exit 0
-              fi
-            }
-          done
-        }
-
-        retry safety_mechanism
-
-
+      volumeMounts:
+        - mountPath: /tmp
+          name: database
+  # sidecar is build daily and will be referenced by a tag
+  # to provide latest database
+  sidecars:
+    - name: database-uncompressed
+      image: quay.io/redhat-appstudio/clair-in-ci:uncompressed-db
+      script: |
+        #!/usr/bin/env bash
+        mv matcher.db /tmp
+      volumeMounts:
+        - mountPath: /tmp
+          name: database
+  volumes:
+    - name: database
+      emptydir: {}
   workspaces:
     - name: clair-ws
+    - name: registry-auth
+      optional: true
