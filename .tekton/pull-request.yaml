@@ -116,9 +116,8 @@ spec:
                 value: redhat-appstudio
               - name: E2E_APPLICATIONS_NAMESPACE
                 value: "$(params.e2e_test_namespace)"
-              - name: COMPONENT_REPO_URLS_ENV
+              - name: COMPONENT_REPO_URLS
                 value: "https://github.com/redhat-appstudio-qe/devfile-sample-python-basic,https://github.com/psturc/devfile-stack-nodejs-angular"
-              
     finally:
       - name: e2e-cleanup
         params:
@@ -133,8 +132,7 @@ spec:
               image: registry.redhat.io/openshift4/ose-cli:v4.10
               script: |
                 #!/usr/bin/env bash
-                # Perform cleanup of resources created by e2e test run
-                # TODO: Application and Component names should be unique, so the cleanup task doesn't affect other pipelineruns
+                # Perform cleanup of resources created by gitops service
                 oc delete --ignore-not-found deployment --all -n $(params.e2e_test_namespace)
                 oc delete --ignore-not-found eventlisteners --all -n $(params.e2e_test_namespace)
   workspaces:
