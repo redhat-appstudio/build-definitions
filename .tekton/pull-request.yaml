@@ -103,7 +103,7 @@ spec:
               type: string
           steps:
             - name: e2e-test
-              image: quay.io/redhat-appstudio/pull-request-builds:e2e-d67687af6f8932c58f05e04300c30e732cd75eab
+              image: quay.io/redhat-appstudio/pull-request-builds:e2e-c5bdd78ba5e191bab2da8346cdef150d95c54e85
               imagePullPolicy: Always
               args: [
                 "--ginkgo.label-filter=build-templates-e2e",
@@ -117,7 +117,7 @@ spec:
               - name: E2E_APPLICATIONS_NAMESPACE
                 value: "$(params.e2e_test_namespace)"
               - name: COMPONENT_REPO_URLS
-                value: "https://github.com/redhat-appstudio-qe/devfile-sample-python-basic,https://github.com/psturc/devfile-stack-nodejs-angular"
+                value: "https://github.com/redhat-appstudio-qe/devfile-sample-python-basic,https://github.com/devfile-samples/devfile-sample-go-basic"
     finally:
       - name: e2e-cleanup
         params:
