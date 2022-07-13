@@ -117,7 +117,7 @@ spec:
               - name: E2E_APPLICATIONS_NAMESPACE
                 value: "$(params.e2e_test_namespace)"
               - name: COMPONENT_REPO_URLS
-                value: "https://github.com/redhat-appstudio-qe/devfile-sample-python-basic,https://github.com/psturc-org/simple-nodejs-app"
+                value: "https://github.com/redhat-appstudio-qe/devfile-sample-python-basic,https://github.com/psturc-org/simple-nodejs-app,https://github.com/psturc/devfile-sample-code-with-quarkus"
     finally:
       - name: e2e-cleanup
         params:
