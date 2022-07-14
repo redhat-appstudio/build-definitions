@@ -103,7 +103,7 @@ spec:
               type: string
           steps:
             - name: e2e-test
-              image: quay.io/redhat-appstudio/pull-request-builds:e2e-c5bdd78ba5e191bab2da8346cdef150d95c54e85
+              image: quay.io/redhat-appstudio/e2e-tests:latest
               imagePullPolicy: Always
               args: [
                 "--ginkgo.label-filter=build-templates-e2e",
