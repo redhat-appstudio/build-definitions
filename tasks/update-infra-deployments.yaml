@@ -9,8 +9,20 @@ spec:
       description: Script for changing the infra-deployments
     - name: ORIGIN_REPO
     - name: REVISION
+    - name: TARGET_GH_REPO
+      description: GitHub repository of the infra-deployments code
+      default: redhat-appstudio/infra-deployments
+    - name: GIT_IMAGE
+      description: Image reference containing the git command
+      default: registry.redhat.io/openshift-pipelines/pipelines-git-init-rhel8@sha256:af7dd5b3b1598a980f17d5f5d3d8a4b11ab4f5184677f7f17ad302baa36bd3c1
     - name: shared-secret
       default: infra-deployments-pr-creator
+    - name: GITHUB_APP_ID
+      description: ID of Github app used for updating PR
+      default: "172616"
+    - name: GITHUB_APP_INSTALLATION_ID
+      description: Installation ID of Github app in the organization
+      default: "23331085"
   volumes:
     - name: infra-deployments-pr-creator
       csi:
@@ -19,57 +31,62 @@ spec:
         volumeAttributes:
           sharedSecret: $(params.shared-secret)
           # Must-contain:
-          # 'id_rsa' - deploy key for redhat-appstudio/infra-deployments/
           # 'appstudio-staging-ci' - private key for appstudio-staging-ci Github app
+    - name: shared-dir
+      emptyDir: {}
+
   steps:
     - name: update-infra-deployments
-      image: registry.redhat.io/openshift-pipelines/pipelines-git-init-rhel8@sha256:af7dd5b3b1598a980f17d5f5d3d8a4b11ab4f5184677f7f17ad302baa36bd3c1
+      image: $(params.GIT_IMAGE)
       volumeMounts:
         - name: infra-deployments-pr-creator
           mountPath: /secrets/deploy-key
+        - name: shared-dir
+          mountPath: /shared
+      workingDir: /shared
       script: |
-        cp -R /secrets/deploy-key ~/.ssh
-        chmod 700 ~/.ssh
-        chmod -R 400 ~/.ssh/*
-        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-
-        git config --global user.name "auto-update"
-        git config --global user.email ""
-
         REPO_NAME=$(echo $(params.ORIGIN_REPO) | cut -f5 -d/)
 
-        git clone git@github.com:redhat-appstudio/infra-deployments.git
-        cd infra-deployments
-        git checkout -b $REPO_NAME
+        git clone "https://github.com/${TARGET_GH_REPO}.git" cloned
+        cd cloned
 
         $(params.SCRIPT)
 
-        git commit -a -m "$REPO_NAME update" -m "Automatic update"
-        git push -f --set-upstream origin $REPO_NAME
+        git status -s --porcelain | cut -c4- > ../updated_files.txt
+
+      env:
+        - name: TARGET_GH_REPO
+          value: "$(params.TARGET_GH_REPO)"
     # Based on https://github.com/tektoncd/catalog/tree/main/task/github-app-token/0.2/
     - name: create-mr
       image: quay.io/chmouel/github-app-token@sha256:bc45937ae588df876555ebb56c36350ed74592c7f55f2df255cabef39c926a88
       volumeMounts:
         - name: infra-deployments-pr-creator
           mountPath: /secrets/deploy-key
+        - name: shared-dir
+          mountPath: /shared
+      workingDir: /shared
       env:
         - name: GITHUBAPP_KEY_PATH
           value: /secrets/deploy-key/appstudio-staging-ci
         - name: GITHUBAPP_APP_ID
-          value: "172616"
+          value: "$(params.GITHUB_APP_ID)"
         - name: GITHUBAPP_INSTALLATION_ID
-          value: "23331085"
+          value: "$(params.GITHUB_APP_INSTALLATION_ID)"
         - name: GITHUB_API_URL
           value: https://api.github.com
         - name: ORIGIN_REPO
           value: $(params.ORIGIN_REPO)
         - name: REVISION
           value: $(params.REVISION)
+        - name: TARGET_GH_REPO
+          value: "$(params.TARGET_GH_REPO)"
       script: |
         #!/usr/bin/env python3
         import json
         import os
         import time
+        import base64
 
         import requests
         from jwcrypto import jwk, jwt
@@ -138,9 +155,10 @@ spec:
 
             def create_mr(self):
                 repo_name = os.environ.get('ORIGIN_REPO').split('/')[-1]
+                target_gh_repo = os.environ.get('TARGET_GH_REPO')
                 req = self._request(
                     "POST",
-                    f"/repos/redhat-appstudio/infra-deployments/pulls",
+                    f"/repos/{target_gh_repo}/pulls",
                     headers={
                         "Authorization": f"Bearer {self.token}",
                         "Accept": "application/vnd.github.v3+json"
@@ -155,11 +173,45 @@ spec:
                 print(json_output)
                 return json_output
 
+            def create_reset_branch(self):
+                branch = os.environ.get('ORIGIN_REPO').split('/')[-1]
+                target_gh_repo = os.environ.get('TARGET_GH_REPO')
+                target_branch = self._request("GET", f"/repos/{target_gh_repo}/git/refs/heads/{branch}").json()
+                main_branch_sha = self._request("GET", f"/repos/{target_gh_repo}/git/refs/heads/main").json()['object']['sha']
+                if "ref" in target_branch:
+                    # update branch
+                    self._request(
+                        "PATCH",
+                        f"/repos/{target_gh_repo}/git/refs/heads/{branch}",
+                        data={"sha": main_branch_sha, "force": True}
+                    )
+                else:
+                    # create branch
+                    self._request(
+                        "POST",
+                        f"/repos/{target_gh_repo}/git/refs",
+                        data={"sha": main_branch_sha, "ref": f"refs/heads/{branch}"}
+                    )
+
+            def upload_content(self):
+                branch = os.environ.get('ORIGIN_REPO').split('/')[-1]
+                target_gh_repo = os.environ.get('TARGET_GH_REPO')
+                for file in open('updated_files.txt').readlines():
+                    file = file.strip()
+                    with open(f"cloned/{file}", "rb") as fd:
+                        encoded_string = base64.b64encode(fd.read()).decode("utf-8")
+                    old_sha = self._request("GET", f'/repos/{target_gh_repo}/contents/{file}').json().get("sha")
+                    if old_sha is None:
+                        self._request("PUT", f'/repos/{target_gh_repo}/contents/{file}', data={"message": f"update {file}", "branch": branch, "content": encoded_string})
+                    else:
+                        self._request("PUT", f'/repos/{target_gh_repo}/contents/{file}', data={"message": f"update {file}", "branch": branch, "content": encoded_string, "sha": old_sha})
+
             def get_pr(self):
                 repo_name = os.environ.get('ORIGIN_REPO').split('/')[-1]
+                target_gh_repo = os.environ.get('TARGET_GH_REPO')
                 req = self._request(
                     "GET",
-                    f"/repos/redhat-appstudio/infra-deployments/pulls",
+                    f"/repos/{target_gh_repo}/pulls",
                     headers={
                         "Accept": "application/vnd.github.v3+json"
                     })
@@ -204,6 +256,10 @@ spec:
                 key,
                 app_id=app_id,
                 installation_id=os.environ.get('GITHUBAPP_INSTALLATION_ID'))
+
+
+            github_app.create_reset_branch()
+            github_app.upload_content()
             infra_pr = github_app.create_mr()
             if "url" not in infra_pr:
                 infra_pr = github_app.get_pr()

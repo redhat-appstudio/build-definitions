@@ -40,8 +40,8 @@ spec:
 
     - name: COSIGN_EXPERIMENTAL
       type: string
-      description: Control transparency log lookups. Set to "0" to disable it.
-      default: "1"
+      description: Control transparency log lookups. Set to "1" to enable it.
+      default: "0"
 
     - name: REKOR_HOST
       type: string

@@ -11,8 +11,6 @@ resources:
 - sanity-label-check.yaml
 - summary.yaml
 - utils-task.yaml
-- cosign-verify.yaml
-- cosign-verify-attestation.yaml
 - sanity-inspect-image.yaml
 - deprecated-image-check.yaml
 - hacbs-test-evaluation.yaml

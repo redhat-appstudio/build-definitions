@@ -1,5 +1,24 @@
 #!/bin/bash -e
 
+# Helper function to record the image reference from the output of
+# the "tkn bundle push" command into a given file.
+# Params:
+#   1. Image reference including the tag
+#   2. Output file
+function save_ref() {
+    local output
+    output="$(< /dev/stdin)"
+    echo "${output}"
+    local digest
+    digest="$(echo "${output}" | grep -Po '@\K(sha256:[a-f0-9]*)')"
+
+    local tagRef
+    tagRef="$1"
+    local refFile
+    refFile="$2"
+    echo "${tagRef}@${digest}" >> "${refFile}"
+}
+
 # local dev build script
 SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -27,12 +46,16 @@ fi
 # (This method is used in PR testing)
 : "${TEST_REPO_NAME:=}"
 
-APPSTUDIO_UTILS_IMG="quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-appstudio-utils}:${TEST_REPO_NAME:+utils-}$BUILD_TAG"
+APPSTUDIO_UTILS_IMG="quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-appstudio-utils}:${TEST_REPO_NAME:+build-definitions-utils-}$BUILD_TAG"
 APPSTUDIO_TASKS_REPO=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-appstudio-tasks}
 PIPELINE_BUNDLE_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-build-templates-bundle}:${TEST_REPO_NAME:+build-}$BUILD_TAG
 HACBS_BUNDLE_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-hacbs-templates-bundle}:${TEST_REPO_NAME:+hacbs-}$BUILD_TAG
 HACBS_BUNDLE_LATEST_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-hacbs-templates-bundle}:${TEST_REPO_NAME:+hacbs-}latest
 HACBS_CORE_BUNDLE_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-hacbs-core-service-templates-bundle}:${TEST_REPO_NAME:+hacbs-core-}latest
+
+OUTPUT_TASK_BUNDLE_LIST="${OUTPUT_TASK_BUNDLE_LIST-task-bundle-list}"
+OUTPUT_PIPELINE_BUNDLE_LIST="${OUTPUT_PIPELINE_BUNDLE_LIST-pipeline-bundle-list}"
+rm -f "${OUTPUT_TASK_BUNDLE_LIST}" "${OUTPUT_PIPELINE_BUNDLE_LIST}"
 
 # Build appstudio-utils image
 if [ "$SKIP_BUILD" == "" ]; then
@@ -59,7 +82,7 @@ for TASK in $TASK_TEMP/task*.yaml; do
     TASK_NAME=$(yq e ".metadata.name" $TASK)
     if [ $COUNT -eq $MAX ]; then
         echo Creating $REF
-        tkn bundle push $TASKS $REF
+        tkn bundle push $TASKS $REF | save_ref $REF $OUTPUT_TASK_BUNDLE_LIST
         COUNT=0
         PART=$((PART+1))
         TASKS=
@@ -75,10 +98,10 @@ for TASK in $TASK_TEMP/task*.yaml; do
     COUNT=$((COUNT+1))
 done
 echo Creating $APPSTUDIO_TASKS_REPO:$BUILD_TAG-$PART
-tkn bundle push $TASKS $REF
+tkn bundle push $TASKS $REF | save_ref $REF $OUTPUT_TASK_BUNDLE_LIST
 
 # Build Pipeline bundle with pipelines pointing to newly built appstudio-tasks
-tkn bundle push $PIPELINE_BUNDLE_IMG -f ${PIPELINE_TEMP}/base.yaml
+tkn bundle push $PIPELINE_BUNDLE_IMG -f ${PIPELINE_TEMP}/base.yaml | save_ref $PIPELINE_BUNDLE_IMG $OUTPUT_PIPELINE_BUNDLE_LIST
 tkn bundle push $HACBS_BUNDLE_IMG -f ${PIPELINE_TEMP}/hacbs.yaml
 tkn bundle push $HACBS_BUNDLE_LATEST_IMG -f ${PIPELINE_TEMP}/hacbs.yaml
 tkn bundle push $HACBS_CORE_BUNDLE_IMG -f ${PIPELINE_TEMP}/hacbs-core-service.yaml

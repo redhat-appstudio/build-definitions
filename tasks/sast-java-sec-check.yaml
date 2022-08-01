@@ -34,7 +34,7 @@ spec:
       image: quay.io/redhat-appstudio/hacbs-test:feature-sast
       resources:
         limits:
-          memory: 2Gi
+          memory: 8Gi
           cpu: 2
         requests:
           memory: 512Mi
@@ -60,7 +60,7 @@ spec:
           test_skipped=1
         fi
 
-        ERR_MSG="$(cat stderr.txt)"
+        ERR_MSG="$(echo -n $(cat stderr.txt))"
         ERR_MSG="${ERR_MSG:-unknown}"
         HACBS_ERROR_OUTPUT=$(jq -rc --arg date $(date +%s) --arg MSG "${ERR_MSG: 0: 3000}"
                               --arg test_skipped $test_skipped --null-input \

@@ -32,6 +32,26 @@ PUBLIC_KEY_SECRET="${PUBLIC_KEY_SECRET:-cosign-public-key}"
 NAMESPACE="$(oc project -q)"
 
 #
+# Create a simple Policy
+#
+oc apply -f - <<EOF
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: EnterpriseContractPolicy
+metadata:
+  name: ec-policy
+spec:
+  description: Red Hat's enterprise requirements
+  exceptions:
+    nonBlocking:
+    - not_useful
+  sources:
+  - git:
+      repository: https://github.com/hacbs-contract/ec-policies
+      revision: main
+EOF
+
+#
 # Create an ApplicationSnapshot resource to ensure we're using correct format.
 #
 oc apply -f - <<EOF
@@ -99,7 +119,7 @@ spec:
 
     # Modify these defaults as required
     #- name: STRICT
-    #  value: "1"
+    #  value: "false"
     #- name: POLICY_CONFIGURATION
     #  value: ${NAMESPACE}/ec-policy
 

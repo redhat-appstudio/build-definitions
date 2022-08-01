@@ -2,6 +2,12 @@
   path: /metadata/labels/build-definition.include
 
 - op: add
+  path: /spec/results/-
+  value:
+    name: SBOM_JAVA_COMPONENTS_COUNT
+    description: The counting of Java components by publisher in JSON format
+
+- op: add
   path: /spec/steps/-
   value:
     image: $(params.BUILDER_IMAGE)
@@ -33,11 +39,12 @@
   path: /spec/steps/-
   value:
     name: analyse-dependencies-java-sbom
-    image: quay.io/redhat-appstudio/hacbs-jvm-dependency-analyser:3f4824c3a29836a33a5bca3bcad386930b4197bc
+    image: quay.io/redhat-appstudio/hacbs-jvm-dependency-analyser:09743ae5f54cc12068bbb31b7050d2bca40a91d3
     script: |
       if [ -f /var/lib/containers/java ]; then
-        /opt/jboss/container/java/run/run-java.sh path $(cat /workspace/container_path)
+        /opt/jboss/container/java/run/run-java.sh path $(cat /workspace/container_path) -s $(workspaces.source.path)/sbom-java.json
       fi
+
     volumeMounts:
     - mountPath: /var/lib/containers
       name: varlibcontainers
@@ -47,18 +54,29 @@
 - op: add
   path: /spec/steps/-
   value:
+    env:
+      - name: SBOM_JAVA_COMPONENTS_COUNT_PATH
+        value: $(results.SBOM_JAVA_COMPONENTS_COUNT.path)
     image: registry.redhat.io/ubi8/python-39:1-51
     name: merge-sboms
     script: |
       #!/bin/python3
       import json
+      import os
 
+      # load SBOMs
       with open("./sbom-image.json") as f:
         image_sbom = json.load(f)
 
       with open("./sbom-source.json") as f:
         source_sbom = json.load(f)
 
+      java_sbom = { "components" : [] }
+      if os.path.exists("./sbom-java.json"):
+        with open("./sbom-java.json") as f:
+          java_sbom = json.load(f)
+
+      # fetch unique components from available SBOMs
       def get_identifier(component):
         return component["name"] + '@' + component.get("version", "")
 
@@ -67,17 +85,41 @@
       for component in source_sbom["components"]:
         if get_identifier(component) not in existing_components:
           image_sbom["components"].append(component)
+          existing_components.append(get_identifier(component))
+
+      for component in java_sbom.get("components", []):
+        if get_identifier(component) not in existing_components:
+          image_sbom["components"].append(component)
 
       image_sbom["components"].sort(key=lambda c: get_identifier(c))
 
+      # write the CycloneDX unified SBOM
       with open("./sbom-cyclonedx.json", "w") as f:
         json.dump(image_sbom, f, indent=4)
 
+      # create and write the PURL unified SBOM
       purls = [{"purl": component["purl"]} for component in image_sbom["components"] if "purl" in component]
       purl_content = {"image_contents": {"dependencies": purls}}
 
       with open("sbom-purl.json", "w") as output_file:
-          json.dump(purl_content, output_file, indent=4)
+        json.dump(purl_content, output_file, indent=4)
+
+      # create Tekton result containing counting of Java publishers
+      java_publishers = {}
+
+      for component in java_sbom.get("components", []):
+        publisher = component.get("publisher", None)
+
+        if publisher is None:
+          continue
+
+        if publisher not in java_publishers.keys():
+          java_publishers[publisher] = 0
+
+        java_publishers[publisher] += 1
+
+      with open(os.getenv("SBOM_JAVA_COMPONENTS_COUNT_PATH"), "w") as f:
+        json.dump(java_publishers, f, indent=4)
 
     workingDir: $(workspaces.source.path)
     securityContext:
@@ -110,7 +152,7 @@
 - op: add
   path: /spec/sidecars
   value:
-  - image: quay.io/redhat-appstudio/hacbs-jvm-sidecar:3f4824c3a29836a33a5bca3bcad386930b4197bc
+  - image: quay.io/redhat-appstudio/hacbs-jvm-sidecar:09743ae5f54cc12068bbb31b7050d2bca40a91d3
     imagePullPolicy: Always
     env:
       - name: QUARKUS_REST_CLIENT_CACHE_SERVICE_URL

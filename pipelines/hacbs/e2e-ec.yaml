@@ -31,8 +31,8 @@ spec:
       default: HACBS_TEST_OUTPUT
     - name: COSIGN_EXPERIMENTAL
       type: string
-      description: Control transparency log lookups. Set to "0" to disable it.
-      default: "1"
+      description: Control transparency log lookups. Set to "1" to enable it.
+      default: "0"
     - name: REKOR_HOST
       type: string
       description: Rekor host for transparency log lookups
@@ -52,22 +52,6 @@ spec:
       description: Fail the task if policy fails. Set to "0" to disable it.
       default: "1"
   tasks:
-    - name: cosign-verify
-      params:
-        - name: PUBLIC_KEY
-          value: "$(params.PUBLIC_KEY)"
-        - name: IMAGE
-          value: "$(params.IMAGE_REF)"
-      taskRef:
-        name: cosign-verify
-    - name: cosign-verify-attestation
-      params:
-        - name: PUBLIC_KEY
-          value: "$(params.PUBLIC_KEY)"
-        - name: IMAGE
-          value: "$(params.IMAGE_REF)"
-      taskRef:
-        name: cosign-verify-attestation
     - name: verify-enterprise-contract
       params:
         - name: PUBLIC_KEY

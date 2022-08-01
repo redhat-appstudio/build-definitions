@@ -21,14 +21,14 @@ spec:
           memory: 512Mi
           cpu: 10m
       script: |
-        /usr/local/go/bin/gosec -no-fail -fmt=sarif -out=gosec_output.json $(workspaces.workspace.path)/... 2> gosec_output.txt || :
+        /usr/local/go/bin/gosec -no-fail -fmt=sarif -out=gosec_output.json $(workspaces.workspace.path)/... | tee gosec_output.txt
 
         # Test if any package was found
         # Even with -no-fail, gosec uses exit code 1 for several states,
         # including when there are no packages found.
         SKIP_MSG="No packages found"
         test_not_skipped=0
-        grep -q "$SKIP_MSG" gosec_output.txt || test_not_skipped=$?
+        grep -q "$SKIP_MSG$" gosec_output.txt || test_not_skipped=$?
 
         HACBS_ERROR_OUTPUT=$(jq -rc --arg date $(date +%s) --null-input \
           '{result: "ERROR", timestamp: $date}')

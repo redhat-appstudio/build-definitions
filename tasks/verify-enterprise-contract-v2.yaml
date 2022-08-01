@@ -38,7 +38,7 @@ spec:
     - name: REKOR_HOST
       type: string
       description: Rekor host for transparency log lookups
-      default: https://rekor.sigstore.dev
+      default: ""
 
     - name: SSL_CERT_DIR
       type: string
@@ -53,8 +53,8 @@ spec:
 
     - name: STRICT
       type: string
-      description: Fail the task if policy fails. Set to "0" to disable it.
-      default: "1"
+      description: Fail the task if policy fails. Set to "false" to disable it.
+      default: "true"
 
   results:
     - name: REPORT
@@ -66,12 +66,13 @@ spec:
       command: [ec]
       args:
         - version
-    - name: verify
+    - name: validate
       image: appstudio-utils
       command: [ec]
       args:
-        - eval
-        - "--input"
+        - validate
+        - image
+        - "--json-input"
         - "$(params.IMAGES)"
         - "--policy"
         - "$(params.POLICY_CONFIGURATION)"
@@ -79,8 +80,8 @@ spec:
         - "$(params.PUBLIC_KEY)"
         - "--rekor-url"
         - "$(params.REKOR_HOST)"
-        - "--strict"
-        - "$(params.STRICT)"
+        # NOTE: The syntax below is required to negate boolean parameters
+        - "--strict=false"
         - "--output-file"
         - "$(results.REPORT.path)"
       env:
@@ -93,3 +94,19 @@ spec:
           # value expected by Tekton Pipelines. NOTE: If params.SSL_CERT_DIR is empty, the value
           # will contain a trailing ":" - this is ok.
           value: "/tekton-custom-certs:/etc/ssl/certs:/etc/pki/tls/certs:/system/etc/security/cacerts:$(params.SSL_CERT_DIR)"
+    - name: display
+      image: appstudio-utils
+      command: [jq]
+      args:
+        - "."
+        - "$(results.REPORT.path)"
+    - name: assert
+      image: appstudio-utils
+      command: [jq]
+      args:
+        - "--argjson"
+        - "strict"
+        - "$(params.STRICT)"
+        - "-e"
+        - ".success or ($strict | not)"
+        - "$(results.REPORT.path)"
