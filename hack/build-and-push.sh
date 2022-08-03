@@ -48,7 +48,7 @@ fi
 
 APPSTUDIO_UTILS_IMG="quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-appstudio-utils}:${TEST_REPO_NAME:+build-definitions-utils-}$BUILD_TAG"
 APPSTUDIO_TASKS_REPO=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-appstudio-tasks}
-PIPELINE_BUNDLE_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-build-templates-bundle}:${TEST_REPO_NAME:+base-}$BUILD_TAG
+PIPELINE_BUNDLE_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-build-templates-bundle}:${TEST_REPO_NAME:+build-}$BUILD_TAG
 HACBS_BUNDLE_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-hacbs-templates-bundle}:${TEST_REPO_NAME:+hacbs-}$BUILD_TAG
 HACBS_BUNDLE_LATEST_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-hacbs-templates-bundle}:${TEST_REPO_NAME:+hacbs-}latest
 HACBS_CORE_BUNDLE_IMG=quay.io/$MY_QUAY_USER/${TEST_REPO_NAME:-hacbs-core-service-templates-bundle}:${TEST_REPO_NAME:+hacbs-core-}latest
