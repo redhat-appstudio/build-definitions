@@ -159,9 +159,9 @@
     imagePullPolicy: IfNotPresent
     env:
       - name: QUARKUS_REST_CLIENT_CACHE_SERVICE_URL
-        value: "http://hacbs-jvm-cache.jvm-build-service.svc.cluster.local"
+        value: "http://jvm-build-workspace-artifact-cache.$(context.taskRun.namespace).svc.cluster.local"
       - name: QUARKUS_S3_ENDPOINT_OVERRIDE
-        value: "http://localstack.jvm-build-service.svc.cluster.local:4572"
+        value: "http://jvm-build-workspace-localstack.$(context.taskRun.namespace).svc.cluster.local"
       - name: QUARKUS_S3_AWS_REGION
         value: "us-east-1"
       - name: QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID
