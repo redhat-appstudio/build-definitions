@@ -45,6 +45,7 @@ spec:
           memory: 512Mi
           cpu: 10m
       script: |
+        echo "$( date --utc -Ins ) Checking image name."
         imagewithouttag=$(echo $IMAGE_URL | sed "s/\(.*\):.*/\1/" | tr -d '\n')
 
         # strip new-line escape symbol from parameter and save it to variable
@@ -53,19 +54,20 @@ spec:
         # check if image is attestation one, skip the clamav scan in such case
         if [[ $imageanddigest == *.att ]]
         then
-            echo "$imageanddigest is an attestation image. Skipping ClamAV scan."
+            echo "$( date --utc -Ins ) $imageanddigest is an attestation image. Skipping ClamAV scan."
             exit 0
         fi
         mkdir content
         cd content
-        echo Extracting image.
+        echo "$( date --utc -Ins ) Extracting image."
         if ! oc image extract --registry-config ~/.docker/config.json $imageanddigest; then
           echo "Unable to extract image. Skipping ClamAV scan!"
           exit 0
         fi
-        echo Extraction done.
+        echo "$( date --utc -Ins ) Extraction done."
         clamscan -ri --max-scansize=250M | tee /tekton/home/clamscan-result.log
         echo "Executed-on: Scan was executed on version - $(clamscan --version)" | tee -a /tekton/home/clamscan-result.log
+        echo "$( date --utc -Ins ) Finished."
       volumeMounts:
         - mountPath: /var/lib/clamav
           name: dbfolder

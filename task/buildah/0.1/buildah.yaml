@@ -100,25 +100,30 @@ spec:
     - name: COMMIT_SHA
       value: $(params.COMMIT_SHA)
     script: |
+      echo "$( date --utc -Ins ) Starting the build"
+
       if [ -e "$CONTEXT/$DOCKERFILE" ]; then
         dockerfile_path="$CONTEXT/$DOCKERFILE"
+        echo "$( date --utc -Ins ) Reuse Dockerfile from $dockerfile_path"
       elif [ -e "$DOCKERFILE" ]; then
         dockerfile_path="$DOCKERFILE"
+        echo "$( date --utc -Ins ) Reuse Dockerfile from $dockerfile_path"
       elif echo "$DOCKERFILE" | grep -q "^https\?://"; then
-        echo "Fetch Dockerfile from $DOCKERFILE"
+        echo "$( date --utc -Ins ) Fetch Dockerfile from $DOCKERFILE"
         dockerfile_path=$(mktemp --suffix=-Dockerfile)
         http_code=$(curl -s -L -w "%{http_code}" --output "$dockerfile_path" "$DOCKERFILE")
         if [ $http_code != 200 ]; then
-          echo "No Dockerfile is fetched. Server responds $http_code"
+          echo "$( date --utc -Ins ) No Dockerfile is fetched. Server responds $http_code"
           exit 1
         fi
+        echo "$( date --utc -Ins ) Try to fetch dockerignore from $DOCKERFILE.dockerignore"
         http_code=$(curl -s -L -w "%{http_code}" --output "$dockerfile_path.dockerignore.tmp" "$DOCKERFILE.dockerignore")
         if [ $http_code = 200 ]; then
-          echo "Fetched .dockerignore from $DOCKERFILE.dockerignore"
+          echo "$( date --utc -Ins ) Fetched .dockerignore from $DOCKERFILE.dockerignore"
           mv "$dockerfile_path.dockerignore.tmp" $CONTEXT/.dockerignore
         fi
       else
-        echo "Cannot find Dockerfile $DOCKERFILE"
+        echo "$( date --utc -Ins ) Cannot find Dockerfile $DOCKERFILE"
         exit 1
       fi
       if [ -n "$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR" ] && grep -q '^\s*RUN \(./\)\?mvn' "$dockerfile_path"; then
@@ -138,9 +143,10 @@ spec:
         BUILDAH_ARGS="--pull=never"
         UNSHARE_ARGS="--net"
         for image in $(grep -i '^\s*FROM' "$dockerfile_path" | sed 's/--platform=\S*//' | awk '{print $2}'); do
+          echo "$( date --utc -Ins ) Pull image $image"
           unshare -Ufp --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah pull $image
         done
-        echo "Build will be executed with network isolation"
+        echo "$( date --utc -Ins ) Build will be executed with network isolation"
       fi
 
       if [ -n "${PREFETCH_INPUT}" ]; then
@@ -148,7 +154,7 @@ spec:
         chmod -R go+rwX /tmp/cachi2
         VOLUME_MOUNTS="--volume /tmp/cachi2:/cachi2"
         sed -i 's|^\s*run |RUN . /cachi2/cachi2.env \&\& \\\n    |i' "$dockerfile_path"
-        echo "Prefetched content will be made available"
+        echo "$( date --utc -Ins ) Prefetched content will be made available"
       fi
 
       LABELS=(
@@ -159,22 +165,29 @@ spec:
       [ -n "$COMMIT_SHA" ] && LABELS+=("--label" "vcs-ref=$COMMIT_SHA")
       [ -n "$IMAGE_EXPIRES_AFTER" ] && LABELS+=("--label" "quay.expires-after=$IMAGE_EXPIRES_AFTER")
 
+      echo "$( date --utc -Ins ) Start buildah build"
       unshare -Uf $UNSHARE_ARGS --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah build \
         $VOLUME_MOUNTS \
         $BUILDAH_ARGS \
         ${LABELS[@]} \
         --tls-verify=$TLSVERIFY --no-cache \
         --ulimit nofile=4096:4096 \
+        --log-level=debug \
         -f "$dockerfile_path" -t $IMAGE $CONTEXT
 
-      container=$(buildah from --pull-never $IMAGE)
+      echo "$( date --utc -Ins ) Start buildah from"
+      container=$(buildah from --log-level=debug --pull-never $IMAGE)
+      echo "$( date --utc -Ins ) Start buildah mount"
       buildah mount $container | tee /workspace/container_path
       echo $container > /workspace/container_name
 
       # Save the SBOM produced by Cachi2 so it can be merged into the final SBOM later
       if [ -n "${PREFETCH_INPUT}" ]; then
+        echo "$( date --utc -Ins ) Copying SBOM Cachi2"
         cp /tmp/cachi2/output/bom.json ./sbom-cachi2.json
       fi
+
+      echo "$( date --utc -Ins ) Done"
 
     securityContext:
       capabilities:
@@ -278,6 +291,8 @@ spec:
     image: $(params.BUILDER_IMAGE)
     resources: {}
     script: |
+      echo "$( date --utc -Ins ) Starting SBOM work"
+
       # Expose base image digests
       buildah images --format '{{ .Name }}:{{ .Tag }}@{{ .Digest }}' | grep -v $IMAGE > $(results.BASE_IMAGES_DIGESTS.path)
 
@@ -287,6 +302,7 @@ spec:
       buildah copy $container sbom-cyclonedx.json sbom-purl.json /root/buildinfo/content_manifests/
       buildah config -a org.opencontainers.image.base.name=${base_image_name} -a org.opencontainers.image.base.digest=${base_image_digest} $container
       buildah commit $container $IMAGE
+      echo "$( date --utc -Ins ) Committed"
 
       status=-1
       max_run=5
@@ -294,17 +310,19 @@ spec:
       for run in $(seq 1 $max_run); do
         status=0
         [ "$run" -gt 1 ] && sleep $sleep_sec
-        echo "Pushing sbom image to registry"
+        echo "$( date --utc -Ins ) Pushing sbom image to registry"
         buildah push \
           --tls-verify=$TLSVERIFY \
+          --log-level=debug \
           --digestfile $(workspaces.source.path)/image-digest $IMAGE \
           docker://$IMAGE && break || status=$?
       done
       if [ "$status" -ne 0 ]; then
-          echo "Failed to push sbom image to registry after ${max_run} tries"
+          echo "$( date --utc -Ins ) Failed to push sbom image to registry after ${max_run} tries"
           exit 1
       fi
 
+      echo "$( date --utc -Ins ) Almost done"
       cat "$(workspaces.source.path)"/image-digest | tee $(results.IMAGE_DIGEST.path)
       echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
 
