@@ -8,6 +8,7 @@ metadata:
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: "appstudio"
+
 spec:
   description: Source image build.
   params:

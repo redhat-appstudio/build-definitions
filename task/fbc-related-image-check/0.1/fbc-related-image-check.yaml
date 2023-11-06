@@ -64,9 +64,10 @@ spec:
           fi
         done
         if [ -z "$FAILEDIMAGES" ]; then
-          note="Task $(context.task.name) succeeded: For details, check Tekton task result TEST_OUTPUT."
+          note="Task $(context.task.name) succeeded: For details, check Tekton task logs."
           TEST_OUTPUT=$(make_result_json -r SUCCESS -s 1 -t "$note")
           echo "${TEST_OUTPUT}" | tee "$(results.TEST_OUTPUT.path)"
+          exit 0
         else
           echo "These images failed inspection: $FAILEDIMAGES."
           note="Task $(context.task.name) failed: Command skopeo inspect could not inspect images. For details, check Tekton task log."

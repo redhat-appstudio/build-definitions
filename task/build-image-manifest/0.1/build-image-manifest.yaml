@@ -60,21 +60,25 @@ spec:
       value: $(params.COMMIT_SHA)
     args: ["$(params.IMAGES[*])"]
     script: |
-
-
+      #!/bin/bash
       # Fixing group permission on /var/lib/containers
+      set -eu
+      set -o pipefail
       chown root:root /var/lib/containers
 
       sed -i 's/^\s*short-name-mode\s*=\s*.*/short-name-mode = "disabled"/' /etc/containers/registries.conf
 
-      # Setting new namespace to run buildah - 2^32-2
-      echo 'root:1:4294967294' | tee -a /etc/subuid >> /etc/subgid
-
       buildah manifest create "$IMAGE"
       for i in $@
       do
-        unshare -Uf --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah pull "$i"
-        unshare -Uf --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah manifest add $IMAGE "$i"
+        TOADD="$i"
+        if [[ $(echo $i | tr -cd ":" | wc -c) == 2 ]]; then
+          #we need to remove the tag, and just reference the digest
+          #as tag + digest is not supported
+          TOADD="$(echo $i | cut -d: -f1)@sha256:$(echo $i | cut -d: -f3)"
+        fi
+        echo "Adding $TOADD"
+        buildah manifest add $IMAGE "docker://$TOADD"
       done
 
       status=-1

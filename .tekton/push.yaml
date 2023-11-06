@@ -135,7 +135,7 @@ spec:
                 DATA_BUNDLE_REPO='quay.io/redhat-appstudio-tekton-catalog/data-acceptable-bundles'
 
                 # Update the OPA data bundle.
-                ec track bundle \
+                ec track bundle --debug \
                   --input "oci:${DATA_BUNDLE_REPO}:latest" \
                   --output "oci:${DATA_BUNDLE_REPO}:${TAG}" \
                   --freshen \
