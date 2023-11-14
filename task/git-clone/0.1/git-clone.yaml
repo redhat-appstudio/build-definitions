@@ -135,7 +135,14 @@ spec:
     - name: WORKSPACE_BASIC_AUTH_DIRECTORY_PATH
       value: $(workspaces.basic-auth.path)
     image: $(params.gitInitImage)
-    resources: {}
+    resources:
+      limits:
+        memory: 4Gi
+        cpu: 2
+      requests:
+        memory: 512Mi
+        cpu: 250m
+
     securityContext:
       runAsUser: 0
     script: |
