@@ -21,7 +21,6 @@ spec:
     - name: docker-auth
       description: unused
       default: ""
-
   steps:
     - name: extract-and-scan-image
       image: quay.io/redhat-appstudio/hacbs-test:v1.1.9@sha256:866675ee3064cf4768691ecca478063ce12f0556fb9d4f24ca95c98664ffbd43
@@ -178,7 +177,7 @@ spec:
   # provides latest virus database for clamscan only
   # does not execute anything
   sidecars:
-    - image: quay.io/redhat-appstudio/clamav-db:v1  # explicit floating tag, daily updates, per arch call this is exempt for now for use of image digest
+    - image: quay.io/redhat-appstudio/clamav-db:v1 # explicit floating tag, daily updates, per arch call this is exempt for now for use of image digest
       imagePullPolicy: Always
       name: database
       script: |

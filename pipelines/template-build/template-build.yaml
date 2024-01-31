@@ -67,9 +67,9 @@ spec:
         version: "0.2"
     - name: clone-repository
       when:
-      - input: $(tasks.init.results.build)
-        operator: in
-        values: ["true"]
+        - input: $(tasks.init.results.build)
+          operator: in
+          values: ["true"]
       runAfter:
         - init
       params:
@@ -87,9 +87,9 @@ spec:
           workspace: git-auth
     - name: prefetch-dependencies
       when:
-      - input: $(params.hermetic)
-        operator: in
-        values: ["true"]
+        - input: $(params.hermetic)
+          operator: in
+          values: ["true"]
       params:
         - name: input
           value: $(params.prefetch-input)
@@ -103,9 +103,9 @@ spec:
           workspace: workspace
     - name: build-container
       when:
-      - input: $(tasks.init.results.build)
-        operator: in
-        values: ["true"]
+        - input: $(tasks.init.results.build)
+          operator: in
+          values: ["true"]
       runAfter:
         - prefetch-dependencies
       taskRef:
@@ -136,97 +136,96 @@ spec:
           workspace: workspace
     - name: deprecated-base-image-check
       when:
-      - input: $(params.skip-checks)
-        operator: in
-        values: ["false"]
+        - input: $(params.skip-checks)
+          operator: in
+          values: ["false"]
       taskRef:
         name: deprecated-image-check
         version: "0.3"
       params:
-      - name: BASE_IMAGES_DIGESTS
-        value: $(tasks.build-container.results.BASE_IMAGES_DIGESTS)
+        - name: BASE_IMAGES_DIGESTS
+          value: $(tasks.build-container.results.BASE_IMAGES_DIGESTS)
       runAfter:
         - build-container
     - name: clair-scan
       when:
-      - input: $(params.skip-checks)
-        operator: in
-        values: ["false"]
+        - input: $(params.skip-checks)
+          operator: in
+          values: ["false"]
       runAfter:
         - build-container
       taskRef:
         name: clair-scan
         version: "0.1"
       params:
-      - name: image-digest
-        value: $(tasks.build-container.results.IMAGE_DIGEST)
-      - name: image-url
-        value: $(tasks.build-container.results.IMAGE_URL)
+        - name: image-digest
+          value: $(tasks.build-container.results.IMAGE_DIGEST)
+        - name: image-url
+          value: $(tasks.build-container.results.IMAGE_URL)
     - name: sast-snyk-check
       when:
-      - input: $(params.skip-checks)
-        operator: in
-        values: ["false"]
+        - input: $(params.skip-checks)
+          operator: in
+          values: ["false"]
       runAfter:
         - clone-repository
       taskRef:
         name: sast-snyk-check
         version: "0.1"
       workspaces:
-      - name: workspace
-        workspace: workspace
+        - name: workspace
+          workspace: workspace
     - name: clamav-scan
       when:
-      - input: $(params.skip-checks)
-        operator: in
-        values: ["false"]
+        - input: $(params.skip-checks)
+          operator: in
+          values: ["false"]
       runAfter:
         - build-container
       taskRef:
         name: clamav-scan
         version: "0.1"
       params:
-      - name: image-digest
-        value: $(tasks.build-container.results.IMAGE_DIGEST)
-      - name: image-url
-        value: $(tasks.build-container.results.IMAGE_URL)
+        - name: image-digest
+          value: $(tasks.build-container.results.IMAGE_DIGEST)
+        - name: image-url
+          value: $(tasks.build-container.results.IMAGE_URL)
     - name: sbom-json-check
       when:
-      - input: $(params.skip-checks)
-        operator: in
-        values: ["false"]
+        - input: $(params.skip-checks)
+          operator: in
+          values: ["false"]
       runAfter:
         - build-container
       taskRef:
         name: sbom-json-check
         version: "0.1"
       params:
-      - name: IMAGE_URL
-        value: $(tasks.build-container.results.IMAGE_URL)
-      - name: IMAGE_DIGEST
-        value: $(tasks.build-container.results.IMAGE_DIGEST)
-
+        - name: IMAGE_URL
+          value: $(tasks.build-container.results.IMAGE_URL)
+        - name: IMAGE_DIGEST
+          value: $(tasks.build-container.results.IMAGE_DIGEST)
   finally:
     - name: show-sbom
       taskRef:
         name: show-sbom
         version: "0.1"
       params:
-      - name: IMAGE_URL
-        value: $(tasks.build-container.results.IMAGE_URL)
+        - name: IMAGE_URL
+          value: $(tasks.build-container.results.IMAGE_URL)
     - name: show-summary
       taskRef:
         name: summary
         version: "0.1"
       params:
-      - name: pipelinerun-name
-        value: "$(context.pipelineRun.name)"
-      - name: git-url
-        value: "$(tasks.clone-repository.results.url)?rev=$(tasks.clone-repository.results.commit)"
-      - name: image-url
-        value: $(params.output-image)
-      - name: build-task-status
-        value: $(tasks.build-container.status)
+        - name: pipelinerun-name
+          value: "$(context.pipelineRun.name)"
+        - name: git-url
+          value: "$(tasks.clone-repository.results.url)?rev=$(tasks.clone-repository.results.commit)"
+        - name: image-url
+          value: $(params.output-image)
+        - name: build-task-status
+          value: $(tasks.build-container.status)
   results:
     - name: IMAGE_URL
       value: "$(tasks.build-container.results.IMAGE_URL)"

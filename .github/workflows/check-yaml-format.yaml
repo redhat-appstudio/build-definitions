@@ -1,0 +1,28 @@
+name: Validate PR - YAML Format
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  go:
+    name: Check Buildah Remote
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Generate buildah remote
+        run: |
+          ./hack/generate-buildah-remote.sh
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5
+      - name: Format YAML
+        run: |
+          go install github.com/google/yamlfmt/cmd/yamlfmt@v0.10.0
+          yamlfmt .
+      - name: Check YAML Formatted
+        run: |
+          if [[ ! -z $(git status -s) ]]
+          then
+            echo "YAML format is not up to date, run 'go install github.com/google/yamlfmt/cmd/yamlfmt@v0.10.0 && yamlfmt .'"
+            echo " If you have modified the buildah task you may also need to run ./hack/generate-buildah-remote.sh"
+            git --no-pager diff
+            exit 1
+          fi

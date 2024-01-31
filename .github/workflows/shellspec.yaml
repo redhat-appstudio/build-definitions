@@ -1,6 +1,4 @@
----
 name: Shellspec Tests
-
 "on":
   pull_request:
     branches:
@@ -8,21 +6,16 @@ name: Shellspec Tests
   push:
     branches:
       - main
-
 jobs:
   Shellspec:
-
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: jerop/tkn@v0.2.0
         with:
           version: v0.32.2
-
       - name: Shellspec
         run: hack/test-shellspec.sh

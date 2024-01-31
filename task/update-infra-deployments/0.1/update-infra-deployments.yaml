@@ -49,7 +49,6 @@ spec:
         secretName: $(params.shared-secret)
     - name: shared-dir
       emptyDir: {}
-
   steps:
     - name: git-clone-infra-deployments
       image: $(params.GIT_IMAGE)
@@ -94,7 +93,6 @@ spec:
           echo "No modified files after running the script, exiting..."
           exit 1
         fi
-
       # Based on https://github.com/tektoncd/catalog/tree/main/task/github-app-token/0.2/
     - name: create-mr
       image: quay.io/redhat-appstudio/github-app-token@sha256:b4f2af12e9beea68055995ccdbdb86cfe1be97688c618117e5da2243dc1da18e
@@ -325,7 +323,6 @@ spec:
 
         if __name__ == '__main__':
             main()
-
   workspaces:
     - name: artifacts
       description: Workspace containing arbitrary artifacts used during the task run.

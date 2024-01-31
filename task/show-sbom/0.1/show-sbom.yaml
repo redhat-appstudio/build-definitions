@@ -1,4 +1,3 @@
----
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -16,29 +15,29 @@ spec:
       description: Fully qualified image name to show SBOM for.
       type: string
   steps:
-  - name: show-sbom
-    image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    env:
-    - name: IMAGE_URL
-      value: $(params.IMAGE_URL)
-    script: |
-      #!/busybox/sh
-      status=-1
-      max_try=5
-      wait_sec=2
-      for run in $(seq 1 $max_try); do
-        status=0
-        cosign download sbom $IMAGE_URL 2>>err
-        status=$?
-        if [ "$status" -eq 0 ]; then
-          break
+    - name: show-sbom
+      image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      env:
+        - name: IMAGE_URL
+          value: $(params.IMAGE_URL)
+      script: |
+        #!/busybox/sh
+        status=-1
+        max_try=5
+        wait_sec=2
+        for run in $(seq 1 $max_try); do
+          status=0
+          cosign download sbom $IMAGE_URL 2>>err
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            break
+          fi
+          sleep $wait_sec
+        done
+        if [ "$status" -ne 0 ]; then
+            echo "Failed to get SBOM after ${max_try} tries" >&2
+            cat err >&2
         fi
-        sleep $wait_sec
-      done
-      if [ "$status" -ne 0 ]; then
-          echo "Failed to get SBOM after ${max_try} tries" >&2
-          cat err >&2
-      fi

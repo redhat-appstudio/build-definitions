@@ -1,36 +1,35 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- ../template-build
-
+  - ../template-build
 patches:
-# Use the template-build as a template replacing the Pipeline name and the
-# `build-container` step's task reference
-- patch: |-
-    - op: replace
-      path: /metadata/name
-      value: tekton-bundle-builder
-    - op: replace
-      path: /spec/tasks/3/taskRef
-      value:
-        name: tkn-bundle
-        version: "0.1"
-    - op: add
-      path: /spec/tasks/3/params
-      value:
-      - name: IMAGE
-        value: $(params.output-image)
-      - name: CONTEXT
-        value: $(params.path-context)
-    # Remove tasks that assume a binary image
-    - op: remove
-      path: /spec/tasks/9  # sbom-json-check
-    - op: remove
-      path: /spec/tasks/5  # deprecated-base-image-check
-    - op: remove
-      path: /spec/tasks/4  # build-source-image
-    - op: remove
-      path: /spec/finally/0  # show-sbom
-  target:
-    kind: Pipeline
-    name: template-build
+  # Use the template-build as a template replacing the Pipeline name and the
+  # `build-container` step's task reference
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: tekton-bundle-builder
+      - op: replace
+        path: /spec/tasks/3/taskRef
+        value:
+          name: tkn-bundle
+          version: "0.1"
+      - op: add
+        path: /spec/tasks/3/params
+        value:
+        - name: IMAGE
+          value: $(params.output-image)
+        - name: CONTEXT
+          value: $(params.path-context)
+      # Remove tasks that assume a binary image
+      - op: remove
+        path: /spec/tasks/9  # sbom-json-check
+      - op: remove
+        path: /spec/tasks/5  # deprecated-base-image-check
+      - op: remove
+        path: /spec/tasks/4  # build-source-image
+      - op: remove
+        path: /spec/finally/0  # show-sbom
+    target:
+      kind: Pipeline
+      name: template-build

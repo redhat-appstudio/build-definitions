@@ -9,8 +9,7 @@ metadata:
   name: deprecated-image-check
 spec:
   description: >-
-    Identifies the unmaintained and potentially insecure deprecated base images.
-    Pyxis API collects metadata from image repository, and Conftest applies supplied policy to identify the deprecated images using that metadata.
+    Identifies the unmaintained and potentially insecure deprecated base images. Pyxis API collects metadata from image repository, and Conftest applies supplied policy to identify the deprecated images using that metadata.
   params:
     - name: POLICY_DIR
       description: Path to directory containing Conftest policies.
@@ -20,13 +19,11 @@ spec:
       default: "required_checks"
     - name: BASE_IMAGES_DIGESTS
       description: Digests of base build images.
-
   results:
     - name: PYXIS_HTTP_CODE
       description: HTTP code returned by Pyxis API endpoint.
     - description: Tekton task test output.
       name: TEST_OUTPUT
-
   steps:
     - name: check-images
       image: quay.io/redhat-appstudio/hacbs-test:v1.1.9@sha256:866675ee3064cf4768691ecca478063ce12f0556fb9d4f24ca95c98664ffbd43

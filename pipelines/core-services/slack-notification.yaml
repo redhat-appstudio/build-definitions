@@ -11,14 +11,14 @@
       name: slack-webhook-notification
       version: "0.1"
     when:
-    - input: $(params.slack-webhook-notification-team)
-      operator: notin
-      values: [""]
-    - input: $(tasks.status)
-      operator: in
-      values: ["Failed"]
+      - input: $(params.slack-webhook-notification-team)
+        operator: notin
+        values: [""]
+      - input: $(tasks.status)
+        operator: in
+        values: ["Failed"]
     params:
-    - name: message
-      value: Tekton pipelineRun $(context.pipelineRun.name) failed
-    - name: key-name
-      value: $(params.slack-webhook-notification-team)
+      - name: message
+        value: Tekton pipelineRun $(context.pipelineRun.name) failed
+      - name: key-name
+        value: $(params.slack-webhook-notification-team)

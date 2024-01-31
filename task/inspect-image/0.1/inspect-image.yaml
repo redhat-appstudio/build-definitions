@@ -1,4 +1,3 @@
----
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
@@ -10,8 +9,7 @@ metadata:
   name: inspect-image
 spec:
   description: >-
-    Inspects and analyzes manifest data of the container's source image, and its base image (if available) using Skopeo.
-    An image's manifest data contains information about the layers that make up the image, the platforms for which the image is intended, and other metadata about the image.
+    Inspects and analyzes manifest data of the container's source image, and its base image (if available) using Skopeo. An image's manifest data contains information about the layers that make up the image, the platforms for which the image is intended, and other metadata about the image.
   params:
     - name: IMAGE_URL
       description: Fully qualified image name.
@@ -32,115 +30,114 @@ spec:
   workspaces:
     - name: source
   steps:
-  - name: inspect-image
-    image: quay.io/redhat-appstudio/hacbs-test:v1.1.9@sha256:866675ee3064cf4768691ecca478063ce12f0556fb9d4f24ca95c98664ffbd43
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    workingDir: $(workspaces.source.path)/hacbs/$(context.task.name)
-    securityContext:
-      runAsUser: 0
-      capabilities:
-        add:
-          - SETFCAP
-    env:
-      - name: IMAGE_URL
-        value: $(params.IMAGE_URL)
-      - name: IMAGE_DIGEST
-        value: $(params.IMAGE_DIGEST)
+    - name: inspect-image
+      image: quay.io/redhat-appstudio/hacbs-test:v1.1.9@sha256:866675ee3064cf4768691ecca478063ce12f0556fb9d4f24ca95c98664ffbd43
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      workingDir: $(workspaces.source.path)/hacbs/$(context.task.name)
+      securityContext:
+        runAsUser: 0
+        capabilities:
+          add:
+            - SETFCAP
+      env:
+        - name: IMAGE_URL
+          value: $(params.IMAGE_URL)
+        - name: IMAGE_DIGEST
+          value: $(params.IMAGE_DIGEST)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        source /utils.sh
+        trap 'handle_error $(results.TEST_OUTPUT.path)' EXIT
 
-    script: |
-      #!/usr/bin/env bash
-      set -euo pipefail
-      source /utils.sh
-      trap 'handle_error $(results.TEST_OUTPUT.path)' EXIT
+        IMAGE_INSPECT=image_inspect.json
+        BASE_IMAGE_INSPECT=base_image_inspect.json
+        RAW_IMAGE_INSPECT=raw_image_inspect.json
 
-      IMAGE_INSPECT=image_inspect.json
-      BASE_IMAGE_INSPECT=base_image_inspect.json
-      RAW_IMAGE_INSPECT=raw_image_inspect.json
+        IMAGE_URL="${IMAGE_URL}@${IMAGE_DIGEST}"
+        # Given a tag and a the digest in the IMAGE_URL we opt to use the digest alone
+        # this is because containers/image currently doesn't support image references
+        # that contain both. See https://github.com/containers/image/issues/1736
+        if [[ "${IMAGE_URL}" == *":"*"@"* ]]; then
+          IMAGE_URL="${IMAGE_URL/:*@/@}"
+        fi
 
-      IMAGE_URL="${IMAGE_URL}@${IMAGE_DIGEST}"
-      # Given a tag and a the digest in the IMAGE_URL we opt to use the digest alone
-      # this is because containers/image currently doesn't support image references
-      # that contain both. See https://github.com/containers/image/issues/1736
-      if [[ "${IMAGE_URL}" == *":"*"@"* ]]; then
-        IMAGE_URL="${IMAGE_URL/:*@/@}"
-      fi
+        status=-1
+        max_run=5
+        sleep_sec=10
+        for run in $(seq 1 $max_run); do
+          status=0
+          [ "$run" -gt 1 ] && sleep $sleep_sec  # skip last sleep
+          echo "Inspecting manifest for source image ${IMAGE_URL} (try $run/$max_run)."
+          skopeo inspect --no-tags docker://"${IMAGE_URL}" > $IMAGE_INSPECT && break || status=$?
+        done
+        if [ "$status" -ne 0 ]; then
+            echo "Failed to inspect image ${IMAGE_URL}"
+            note="Task $(context.task.name) failed: Encountered errors while inspecting image. For details, check Tekton task log."
+            TEST_OUTPUT=$(make_result_json -r ERROR -t "$note")
+            echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
+            exit 0
+        fi
+        echo "Image ${IMAGE_URL} metadata:"
+        cat "$IMAGE_INSPECT"
 
-      status=-1
-      max_run=5
-      sleep_sec=10
-      for run in $(seq 1 $max_run); do
-        status=0
-        [ "$run" -gt 1 ] && sleep $sleep_sec  # skip last sleep
-        echo "Inspecting manifest for source image ${IMAGE_URL} (try $run/$max_run)."
-        skopeo inspect --no-tags docker://"${IMAGE_URL}" > $IMAGE_INSPECT && break || status=$?
-      done
-      if [ "$status" -ne 0 ]; then
-          echo "Failed to inspect image ${IMAGE_URL}"
-          note="Task $(context.task.name) failed: Encountered errors while inspecting image. For details, check Tekton task log."
-          TEST_OUTPUT=$(make_result_json -r ERROR -t "$note")
-          echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
-          exit 0
-      fi
-      echo "Image ${IMAGE_URL} metadata:"
-      cat "$IMAGE_INSPECT"
+        for run in $(seq 1 $max_run); do
+          status=0
+          [ "$run" -gt 1 ] && sleep $sleep_sec  # skip last sleep
+          echo "Inspecting raw image manifest ${IMAGE_URL} (try $run/$max_run)."
+          skopeo inspect --no-tags --raw docker://"${IMAGE_URL}" > $RAW_IMAGE_INSPECT && break || status=$?
+        done
+        if [ "$status" -ne 0 ]; then
+            echo "Failed to get raw metadata of image ${IMAGE_URL}"
+            note="Task $(context.task.name) failed: Encountered errors while inspecting image. For details, check Tekton task log."
+            TEST_OUTPUT=$(make_result_json -r ERROR -t "$note")
+            echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
+            exit 0
+        fi
+        echo "Image ${IMAGE_URL} raw metadata:"
+        cat "$RAW_IMAGE_INSPECT" | jq  # jq for readable formatting
 
-      for run in $(seq 1 $max_run); do
-        status=0
-        [ "$run" -gt 1 ] && sleep $sleep_sec  # skip last sleep
-        echo "Inspecting raw image manifest ${IMAGE_URL} (try $run/$max_run)."
-        skopeo inspect --no-tags --raw docker://"${IMAGE_URL}" > $RAW_IMAGE_INSPECT && break || status=$?
-      done
-      if [ "$status" -ne 0 ]; then
-          echo "Failed to get raw metadata of image ${IMAGE_URL}"
-          note="Task $(context.task.name) failed: Encountered errors while inspecting image. For details, check Tekton task log."
-          TEST_OUTPUT=$(make_result_json -r ERROR -t "$note")
-          echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
-          exit 0
-      fi
-      echo "Image ${IMAGE_URL} raw metadata:"
-      cat "$RAW_IMAGE_INSPECT" | jq  # jq for readable formatting
-
-      echo "Getting base image manifest for source image ${IMAGE_URL}."
-      BASE_IMAGE_NAME="$(jq -r ".annotations.\"org.opencontainers.image.base.name\"" $RAW_IMAGE_INSPECT)"
-      BASE_IMAGE_DIGEST="$(jq -r ".annotations.\"org.opencontainers.image.base.digest\"" $RAW_IMAGE_INSPECT)"
-      if [ $BASE_IMAGE_NAME == 'null' ]; then
-        echo "Cannot get base image info from annotations."
-        BASE_IMAGE_NAME="$(jq -r ".Labels.\"org.opencontainers.image.base.name\"" $IMAGE_INSPECT)"
-        BASE_IMAGE_DIGEST="$(jq -r ".annotations.\"org.opencontainers.image.base.digest\"" $IMAGE_INSPECT)"
-        if [ "$BASE_IMAGE_NAME" == 'null' ]; then
-          echo "Cannot get base image info from Labels. For details, check source image ${IMAGE_URL}."
+        echo "Getting base image manifest for source image ${IMAGE_URL}."
+        BASE_IMAGE_NAME="$(jq -r ".annotations.\"org.opencontainers.image.base.name\"" $RAW_IMAGE_INSPECT)"
+        BASE_IMAGE_DIGEST="$(jq -r ".annotations.\"org.opencontainers.image.base.digest\"" $RAW_IMAGE_INSPECT)"
+        if [ $BASE_IMAGE_NAME == 'null' ]; then
+          echo "Cannot get base image info from annotations."
+          BASE_IMAGE_NAME="$(jq -r ".Labels.\"org.opencontainers.image.base.name\"" $IMAGE_INSPECT)"
+          BASE_IMAGE_DIGEST="$(jq -r ".annotations.\"org.opencontainers.image.base.digest\"" $IMAGE_INSPECT)"
+          if [ "$BASE_IMAGE_NAME" == 'null' ]; then
+            echo "Cannot get base image info from Labels. For details, check source image ${IMAGE_URL}."
+            exit 0
+          fi
+        fi
+        if [ -z "$BASE_IMAGE_NAME" ]; then
+          echo "Source image ${IMAGE_URL} is built from scratch, so there is no base image."
           exit 0
         fi
-      fi
-      if [ -z "$BASE_IMAGE_NAME" ]; then
-        echo "Source image ${IMAGE_URL} is built from scratch, so there is no base image."
-        exit 0
-      fi
 
-      BASE_IMAGE="${BASE_IMAGE_NAME%:*}@$BASE_IMAGE_DIGEST"
-      echo "Detected base image: $BASE_IMAGE"
-      echo -n "$BASE_IMAGE" > $(results.BASE_IMAGE.path)
+        BASE_IMAGE="${BASE_IMAGE_NAME%:*}@$BASE_IMAGE_DIGEST"
+        echo "Detected base image: $BASE_IMAGE"
+        echo -n "$BASE_IMAGE" > $(results.BASE_IMAGE.path)
 
-      for run in $(seq 1 $max_run); do
-        status=0
-        [ "$run" -gt 1 ] && sleep $sleep_sec  # skip last sleep
-        echo "Inspecting base image ${BASE_IMAGE} (try $run/$max_run)."
-        skopeo inspect --no-tags "docker://$BASE_IMAGE"  > $BASE_IMAGE_INSPECT && break || status=$?
-      done
-      if [ "$status" -ne 0 ]; then
-          echo "Failed to inspect base image ${BASE_IMAGE}"
-          note="Task $(context.task.name) failed: Encountered errors while inspecting image. For details, check Tekton task log."
-          TEST_OUTPUT=$(make_result_json -r ERROR -t "$note")
-          echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
-          exit 0
-      fi
+        for run in $(seq 1 $max_run); do
+          status=0
+          [ "$run" -gt 1 ] && sleep $sleep_sec  # skip last sleep
+          echo "Inspecting base image ${BASE_IMAGE} (try $run/$max_run)."
+          skopeo inspect --no-tags "docker://$BASE_IMAGE"  > $BASE_IMAGE_INSPECT && break || status=$?
+        done
+        if [ "$status" -ne 0 ]; then
+            echo "Failed to inspect base image ${BASE_IMAGE}"
+            note="Task $(context.task.name) failed: Encountered errors while inspecting image. For details, check Tekton task log."
+            TEST_OUTPUT=$(make_result_json -r ERROR -t "$note")
+            echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
+            exit 0
+        fi
 
-      BASE_IMAGE_REPOSITORY="$(jq -r '.Name | sub("[^/]+/"; "") | sub("[:@].*"; "")' "$BASE_IMAGE_INSPECT")"
-      echo "Detected base image repository: $BASE_IMAGE_REPOSITORY"
-      echo -n "$BASE_IMAGE_REPOSITORY" > $(results.BASE_IMAGE_REPOSITORY.path)
+        BASE_IMAGE_REPOSITORY="$(jq -r '.Name | sub("[^/]+/"; "") | sub("[:@].*"; "")' "$BASE_IMAGE_INSPECT")"
+        echo "Detected base image repository: $BASE_IMAGE_REPOSITORY"
+        echo -n "$BASE_IMAGE_REPOSITORY" > $(results.BASE_IMAGE_REPOSITORY.path)
 
-      note="Task $(context.task.name) completed: Check inspected JSON files under $(workspaces.source.path)/hacbs/$(context.task.name)."
-      TEST_OUTPUT=$(make_result_json -r SUCCESS -s 1 -t "$note")
-      echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
+        note="Task $(context.task.name) completed: Check inspected JSON files under $(workspaces.source.path)/hacbs/$(context.task.name)."
+        TEST_OUTPUT=$(make_result_json -r SUCCESS -s 1 -t "$note")
+        echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)

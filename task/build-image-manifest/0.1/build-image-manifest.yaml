@@ -12,97 +12,97 @@ spec:
   description: |-
     This takes existing images and stiches them together into a multi platform image.
   params:
-  - description: Reference of the image buildah will produce.
-    name: IMAGE
-    type: string
-  - default: "true"
-    description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
-    name: TLSVERIFY
-    type: string
-  - name: COMMIT_SHA
-    description: The image is built from this commit.
-    type: string
-    default: ""
-  - name: IMAGES
-    description: List of images that are to be merged into the multi platform image
-    type: array
-  - default: ""
-    description: Delete image tag after specified time. Empty means to keep the image tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
-    name: IMAGE_EXPIRES_AFTER
-    type: string
+    - description: Reference of the image buildah will produce.
+      name: IMAGE
+      type: string
+    - default: "true"
+      description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+      name: TLSVERIFY
+      type: string
+    - name: COMMIT_SHA
+      description: The image is built from this commit.
+      type: string
+      default: ""
+    - name: IMAGES
+      description: List of images that are to be merged into the multi platform image
+      type: array
+    - default: ""
+      description: Delete image tag after specified time. Empty means to keep the image tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
+      name: IMAGE_EXPIRES_AFTER
+      type: string
   results:
-  - description: Digest of the image just built
-    name: IMAGE_DIGEST
-  - description: Image repository where the built image was pushed
-    name: IMAGE_URL
+    - description: Digest of the image just built
+      name: IMAGE_DIGEST
+    - description: Image repository where the built image was pushed
+      name: IMAGE_URL
   stepTemplate:
     env:
-    - name: BUILDAH_FORMAT
-      value: oci
-    - name: STORAGE_DRIVER
-      value: vfs
-    - name: IMAGE
-      value: $(params.IMAGE)
-    - name: TLSVERIFY
-      value: $(params.TLSVERIFY)
+      - name: BUILDAH_FORMAT
+        value: oci
+      - name: STORAGE_DRIVER
+        value: vfs
+      - name: IMAGE
+        value: $(params.IMAGE)
+      - name: TLSVERIFY
+        value: $(params.TLSVERIFY)
   steps:
-  - image: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    name: build
-    computeResources:
-      limits:
-        memory: 4Gi
-      requests:
-        memory: 512Mi
-        cpu: 250m
-    env:
-    - name: COMMIT_SHA
-      value: $(params.COMMIT_SHA)
-    args: ["$(params.IMAGES[*])"]
-    script: |
-      #!/bin/bash
-      # Fixing group permission on /var/lib/containers
-      set -eu
-      set -o pipefail
-      chown root:root /var/lib/containers
+    - image: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      name: build
+      computeResources:
+        limits:
+          memory: 4Gi
+        requests:
+          memory: 512Mi
+          cpu: 250m
+      env:
+        - name: COMMIT_SHA
+          value: $(params.COMMIT_SHA)
+      args: ["$(params.IMAGES[*])"]
+      script: |
+        #!/bin/bash
+        # Fixing group permission on /var/lib/containers
+        set -eu
+        set -o pipefail
+        chown root:root /var/lib/containers
 
-      sed -i 's/^\s*short-name-mode\s*=\s*.*/short-name-mode = "disabled"/' /etc/containers/registries.conf
+        sed -i 's/^\s*short-name-mode\s*=\s*.*/short-name-mode = "disabled"/' /etc/containers/registries.conf
 
-      buildah manifest create "$IMAGE"
-      for i in $@
-      do
-        TOADD="$i"
-        if [[ $(echo $i | tr -cd ":" | wc -c) == 2 ]]; then
-          #we need to remove the tag, and just reference the digest
-          #as tag + digest is not supported
-          TOADD="$(echo $i | cut -d: -f1)@sha256:$(echo $i | cut -d: -f3)"
+        buildah manifest create "$IMAGE"
+        for i in $@
+        do
+          TOADD="$i"
+          if [[ $(echo $i | tr -cd ":" | wc -c) == 2 ]]; then
+            #we need to remove the tag, and just reference the digest
+            #as tag + digest is not supported
+            TOADD="$(echo $i | cut -d: -f1)@sha256:$(echo $i | cut -d: -f3)"
+          fi
+          echo "Adding $TOADD"
+          buildah manifest add $IMAGE "docker://$TOADD"
+        done
+
+        status=-1
+        max_run=5
+        sleep_sec=10
+        for run in $(seq 1 $max_run); do
+          status=0
+          [ "$run" -gt 1 ] && sleep $sleep_sec
+          echo "Pushing image to registry"
+          buildah manifest push \
+            --tls-verify=$TLSVERIFY \
+            --digestfile image-digest $IMAGE \
+            docker://$IMAGE && break || status=$?
+        done
+        if [ "$status" -ne 0 ]; then
+            echo "Failed to push image to registry after ${max_run} tries"
+            exit 1
         fi
-        echo "Adding $TOADD"
-        buildah manifest add $IMAGE "docker://$TOADD"
-      done
 
-      status=-1
-      max_run=5
-      sleep_sec=10
-      for run in $(seq 1 $max_run); do
-        status=0
-        [ "$run" -gt 1 ] && sleep $sleep_sec
-        echo "Pushing image to registry"
-        buildah manifest push \
-          --tls-verify=$TLSVERIFY \
-          --digestfile image-digest $IMAGE \
-          docker://$IMAGE && break || status=$?
-      done
-      if [ "$status" -ne 0 ]; then
-          echo "Failed to push image to registry after ${max_run} tries"
-          exit 1
-      fi
-
-      cat image-digest | tee $(results.IMAGE_DIGEST.path)
-      echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
-    securityContext:
-      capabilities:
-        add:
-          - SETFCAP
+        cat image-digest | tee $(results.IMAGE_DIGEST.path)
+        echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP

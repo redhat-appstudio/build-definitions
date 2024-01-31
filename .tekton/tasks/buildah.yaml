@@ -10,90 +10,90 @@ spec:
     Buildah task builds source into a container image and then pushes it to a container registry.
     Buildah Task builds source into a container image using Project Atomic's Buildah build tool.It uses Buildah's support for building from Dockerfiles, using its buildah build command.This command executes the directives in the Dockerfile to assemble a container image, then pushes that image to a container registry.
   params:
-  - description: Reference of the image buildah will produce.
-    name: IMAGE
-    type: string
-  - default: registry.access.redhat.com/ubi8/buildah@sha256:31f84b19a0774be7cfad751be38fc97f5e86cefd26e0abaec8047ddc650b00bf
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    description: The location of the buildah builder image.
-    name: BUILDER_IMAGE
-    type: string
-  - default: vfs
-    description: Set buildah storage driver
-    name: STORAGE_DRIVER
-    type: string
-  - default: ./Dockerfile
-    description: Path to the Dockerfile to build.
-    name: DOCKERFILE
-    type: string
-  - default: .
-    description: Path to the directory to use as context.
-    name: CONTEXT
-    type: string
-  - default: "true"
-    description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
-    name: TLSVERIFY
-    type: string
-  - default: oci
-    description: The format of the built container, oci or docker
-    name: FORMAT
-    type: string
+    - description: Reference of the image buildah will produce.
+      name: IMAGE
+      type: string
+    - default: registry.access.redhat.com/ubi8/buildah@sha256:31f84b19a0774be7cfad751be38fc97f5e86cefd26e0abaec8047ddc650b00bf
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      description: The location of the buildah builder image.
+      name: BUILDER_IMAGE
+      type: string
+    - default: vfs
+      description: Set buildah storage driver
+      name: STORAGE_DRIVER
+      type: string
+    - default: ./Dockerfile
+      description: Path to the Dockerfile to build.
+      name: DOCKERFILE
+      type: string
+    - default: .
+      description: Path to the directory to use as context.
+      name: CONTEXT
+      type: string
+    - default: "true"
+      description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+      name: TLSVERIFY
+      type: string
+    - default: oci
+      description: The format of the built container, oci or docker
+      name: FORMAT
+      type: string
   results:
-  - description: Digest of the image just built
-    name: IMAGE_DIGEST
-  - description: Image repository where the built image was pushed
-    name: IMAGE_URL
+    - description: Digest of the image just built
+      name: IMAGE_DIGEST
+    - description: Image repository where the built image was pushed
+      name: IMAGE_URL
   steps:
-  - image: $(params.BUILDER_IMAGE)
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent; our default param above specifies a digest
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    name: build
-    computeResources:
-      limits:
-        memory: 2Gi
-      requests:
-        memory: 512Mi
-        cpu: 10m
-    script: |
-      buildah --storage-driver=$(params.STORAGE_DRIVER) build \
-        --format=$(params.FORMAT) \
-        --tls-verify=$(params.TLSVERIFY) --no-cache \
-        -f $(params.DOCKERFILE) -t $(params.IMAGE) $(params.CONTEXT)
-    securityContext:
-      capabilities:
-        add:
-          - SETFCAP
-    volumeMounts:
-    - mountPath: /var/lib/containers
-      name: varlibcontainers
-    workingDir: $(workspaces.source.path)/source
-  - image: $(params.BUILDER_IMAGE)
-    name: push
-    computeResources: {}
-    script: |
-      buildah --storage-driver=$(params.STORAGE_DRIVER) push \
-        --tls-verify=$(params.TLSVERIFY) \
-        --digestfile $(workspaces.source.path)/source/image-digest $(params.IMAGE) \
-        docker://$(params.IMAGE)
-    volumeMounts:
-    - mountPath: /var/lib/containers
-      name: varlibcontainers
-    securityContext:
-      capabilities:
-        add:
-          - SETFCAP
-    workingDir: $(workspaces.source.path)/source
-  - image: $(params.BUILDER_IMAGE)
-    name: digest-to-results
-    computeResources: {}
-    script: |
-      cat "$(workspaces.source.path)"/source/image-digest | tee $(results.IMAGE_DIGEST.path)
-      echo -n "$(params.IMAGE)" | tee $(results.IMAGE_URL.path)
+    - image: $(params.BUILDER_IMAGE)
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent; our default param above specifies a digest
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      name: build
+      computeResources:
+        limits:
+          memory: 2Gi
+        requests:
+          memory: 512Mi
+          cpu: 10m
+      script: |
+        buildah --storage-driver=$(params.STORAGE_DRIVER) build \
+          --format=$(params.FORMAT) \
+          --tls-verify=$(params.TLSVERIFY) --no-cache \
+          -f $(params.DOCKERFILE) -t $(params.IMAGE) $(params.CONTEXT)
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+      workingDir: $(workspaces.source.path)/source
+    - image: $(params.BUILDER_IMAGE)
+      name: push
+      computeResources: {}
+      script: |
+        buildah --storage-driver=$(params.STORAGE_DRIVER) push \
+          --tls-verify=$(params.TLSVERIFY) \
+          --digestfile $(workspaces.source.path)/source/image-digest $(params.IMAGE) \
+          docker://$(params.IMAGE)
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
+      workingDir: $(workspaces.source.path)/source
+    - image: $(params.BUILDER_IMAGE)
+      name: digest-to-results
+      computeResources: {}
+      script: |
+        cat "$(workspaces.source.path)"/source/image-digest | tee $(results.IMAGE_DIGEST.path)
+        echo -n "$(params.IMAGE)" | tee $(results.IMAGE_URL.path)
   volumes:
-  - emptyDir: {}
-    name: varlibcontainers
+    - emptyDir: {}
+      name: varlibcontainers
   workspaces:
-  - name: source
+    - name: source

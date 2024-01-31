@@ -16,439 +16,433 @@ spec:
     When [Java dependency rebuild](https://redhat-appstudio.github.io/docs.stonesoup.io/Documentation/main/cli/proc_enabled_java_dependencies.html) is enabled it triggers rebuilds of Java artifacts.
     When prefetch-dependencies task was activated it is using its artifacts to run build in hermetic environment.
   params:
-  - description: Reference of the image buildah will produce.
-    name: IMAGE
-    type: string
-  - default: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
-    description: The location of the buildah builder image.
-    name: BUILDER_IMAGE
-    type: string
-  - default: ./Dockerfile
-    description: Path to the Dockerfile to build.
-    name: DOCKERFILE
-    type: string
-  - default: .
-    description: Path to the directory to use as context.
-    name: CONTEXT
-    type: string
-  - default: "true"
-    description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS
-      registry)
-    name: TLSVERIFY
-    type: string
-  - default: ""
-    description: unused, should be removed in next task version
-    name: DOCKER_AUTH
-    type: string
-  - default: "false"
-    description: Determines if build will be executed without network access.
-    name: HERMETIC
-    type: string
-  - default: ""
-    description: In case it is not empty, the prefetched content should be made available
-      to the build.
-    name: PREFETCH_INPUT
-    type: string
-  - default: ""
-    description: Delete image tag after specified time. Empty means to keep the image
-      tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks,
-      respectively.
-    name: IMAGE_EXPIRES_AFTER
-    type: string
-  - default: ""
-    description: The image is built from this commit.
-    name: COMMIT_SHA
-    type: string
-  - default: repos.d
-    description: Path in the git repository in which yum repository files are stored
-    name: YUM_REPOS_D_SRC
-  - default: fetched.repos.d
-    description: Path in source workspace where dynamically-fetched repos are present
-    name: YUM_REPOS_D_FETCHED
-  - default: /etc/yum.repos.d
-    description: Target path on the container in which yum repository files should
-      be made available
-    name: YUM_REPOS_D_TARGET
-  - description: The platform to build on
-    name: PLATFORM
-    type: string
+    - description: Reference of the image buildah will produce.
+      name: IMAGE
+      type: string
+    - default: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
+      description: The location of the buildah builder image.
+      name: BUILDER_IMAGE
+      type: string
+    - default: ./Dockerfile
+      description: Path to the Dockerfile to build.
+      name: DOCKERFILE
+      type: string
+    - default: .
+      description: Path to the directory to use as context.
+      name: CONTEXT
+      type: string
+    - default: "true"
+      description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+      name: TLSVERIFY
+      type: string
+    - default: ""
+      description: unused, should be removed in next task version
+      name: DOCKER_AUTH
+      type: string
+    - default: "false"
+      description: Determines if build will be executed without network access.
+      name: HERMETIC
+      type: string
+    - default: ""
+      description: In case it is not empty, the prefetched content should be made available to the build.
+      name: PREFETCH_INPUT
+      type: string
+    - default: ""
+      description: Delete image tag after specified time. Empty means to keep the image tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
+      name: IMAGE_EXPIRES_AFTER
+      type: string
+    - default: ""
+      description: The image is built from this commit.
+      name: COMMIT_SHA
+      type: string
+    - default: repos.d
+      description: Path in the git repository in which yum repository files are stored
+      name: YUM_REPOS_D_SRC
+    - default: fetched.repos.d
+      description: Path in source workspace where dynamically-fetched repos are present
+      name: YUM_REPOS_D_FETCHED
+    - default: /etc/yum.repos.d
+      description: Target path on the container in which yum repository files should be made available
+      name: YUM_REPOS_D_TARGET
+    - description: The platform to build on
+      name: PLATFORM
+      type: string
   results:
-  - description: Digest of the image just built
-    name: IMAGE_DIGEST
-  - description: Image repository where the built image was pushed
-    name: IMAGE_URL
-  - description: Digests of the base images used for build
-    name: BASE_IMAGES_DIGESTS
-  - description: The counting of Java components by publisher in JSON format
-    name: SBOM_JAVA_COMPONENTS_COUNT
-    type: string
-  - description: The Java dependencies that came from community sources such as Maven
-      central.
-    name: JAVA_COMMUNITY_DEPENDENCIES
+    - description: Digest of the image just built
+      name: IMAGE_DIGEST
+    - description: Image repository where the built image was pushed
+      name: IMAGE_URL
+    - description: Digests of the base images used for build
+      name: BASE_IMAGES_DIGESTS
+    - description: The counting of Java components by publisher in JSON format
+      name: SBOM_JAVA_COMPONENTS_COUNT
+      type: string
+    - description: The Java dependencies that came from community sources such as Maven central.
+      name: JAVA_COMMUNITY_DEPENDENCIES
   stepTemplate:
     computeResources: {}
     env:
-    - name: BUILDAH_FORMAT
-      value: oci
-    - name: STORAGE_DRIVER
-      value: vfs
-    - name: HERMETIC
-      value: $(params.HERMETIC)
-    - name: PREFETCH_INPUT
-      value: $(params.PREFETCH_INPUT)
-    - name: CONTEXT
-      value: $(params.CONTEXT)
-    - name: DOCKERFILE
-      value: $(params.DOCKERFILE)
-    - name: IMAGE
-      value: $(params.IMAGE)
-    - name: TLSVERIFY
-      value: $(params.TLSVERIFY)
-    - name: IMAGE_EXPIRES_AFTER
-      value: $(params.IMAGE_EXPIRES_AFTER)
-    - name: YUM_REPOS_D_SRC
-      value: $(params.YUM_REPOS_D_SRC)
-    - name: YUM_REPOS_D_FETCHED
-      value: $(params.YUM_REPOS_D_FETCHED)
-    - name: YUM_REPOS_D_TARGET
-      value: $(params.YUM_REPOS_D_TARGET)
-    - name: BUILDER_IMAGE
-      value: $(params.BUILDER_IMAGE)
+      - name: BUILDAH_FORMAT
+        value: oci
+      - name: STORAGE_DRIVER
+        value: vfs
+      - name: HERMETIC
+        value: $(params.HERMETIC)
+      - name: PREFETCH_INPUT
+        value: $(params.PREFETCH_INPUT)
+      - name: CONTEXT
+        value: $(params.CONTEXT)
+      - name: DOCKERFILE
+        value: $(params.DOCKERFILE)
+      - name: IMAGE
+        value: $(params.IMAGE)
+      - name: TLSVERIFY
+        value: $(params.TLSVERIFY)
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.IMAGE_EXPIRES_AFTER)
+      - name: YUM_REPOS_D_SRC
+        value: $(params.YUM_REPOS_D_SRC)
+      - name: YUM_REPOS_D_FETCHED
+        value: $(params.YUM_REPOS_D_FETCHED)
+      - name: YUM_REPOS_D_TARGET
+        value: $(params.YUM_REPOS_D_TARGET)
+      - name: BUILDER_IMAGE
+        value: $(params.BUILDER_IMAGE)
   steps:
-  - computeResources:
-      limits:
-        memory: 4Gi
-      requests:
-        cpu: 250m
-        memory: 512Mi
-    env:
-    - name: COMMIT_SHA
-      value: $(params.COMMIT_SHA)
-    image: quay.io/redhat-appstudio/multi-platform-runner:01c7670e81d5120347cf0ad13372742489985e5f@sha256:246adeaaba600e207131d63a7f706cffdcdc37d8f600c56187123ec62823ff44
-    name: build
-    script: |-
-      set -o verbose
-      mkdir -p ~/.ssh
-      if [ -e "/ssh/error" ]; then
-        #no server could be provisioned
-        cat /ssh/error
-        exit 1
-      elif [ -e "/ssh/otp" ]; then
-       curl --cacert /ssh/otp-ca -XPOST -d @/ssh/otp $(cat /ssh/otp-server) >~/.ssh/id_rsa
-       echo "" >> ~/.ssh/id_rsa
-      else
-        cp /ssh/id_rsa ~/.ssh
-      fi
-      chmod 0400 ~/.ssh/id_rsa
-      export SSH_HOST=$(cat /ssh/host)
-      export BUILD_DIR=$(cat /ssh/user-dir)
-      export SSH_ARGS="-o StrictHostKeyChecking=no"
-      mkdir -p scripts
-      echo "$BUILD_DIR"
-      ssh $SSH_ARGS "$SSH_HOST"  mkdir -p "$BUILD_DIR/workspaces" "$BUILD_DIR/scripts"
-
-      PORT_FORWARD=""
-      PODMAN_PORT_FORWARD=""
-      if [ -n "$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR" ] ; then
-      PORT_FORWARD=" -L 80:$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR:80"
-      PODMAN_PORT_FORWARD=" -e JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR=localhost"
-      fi
-
-      rsync -ra $(workspaces.source.path)/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
-      rsync -ra "$HOME/.docker/" "$SSH_HOST:$BUILD_DIR/.docker/"
-      rsync -ra "/tekton/results/" "$SSH_HOST:$BUILD_DIR/tekton-results/"
-      cat >scripts/script-build.sh <<'REMOTESSHEOF'
-      #!/bin/bash
-      set -o verbose
-      set -e
-      cd $(workspaces.source.path)
-      SOURCE_CODE_DIR=source
-      if [ -e "$SOURCE_CODE_DIR/$CONTEXT/$DOCKERFILE" ]; then
-        dockerfile_path="$SOURCE_CODE_DIR/$CONTEXT/$DOCKERFILE"
-      elif [ -e "$SOURCE_CODE_DIR/$DOCKERFILE" ]; then
-        dockerfile_path="$SOURCE_CODE_DIR/$DOCKERFILE"
-      elif echo "$DOCKERFILE" | grep -q "^https\?://"; then
-        echo "Fetch Dockerfile from $DOCKERFILE"
-        dockerfile_path=$(mktemp --suffix=-Dockerfile)
-        http_code=$(curl -s -L -w "%{http_code}" --output "$dockerfile_path" "$DOCKERFILE")
-        if [ $http_code != 200 ]; then
-          echo "No Dockerfile is fetched. Server responds $http_code"
+    - computeResources:
+        limits:
+          memory: 4Gi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+      env:
+        - name: COMMIT_SHA
+          value: $(params.COMMIT_SHA)
+      image: quay.io/redhat-appstudio/multi-platform-runner:01c7670e81d5120347cf0ad13372742489985e5f@sha256:246adeaaba600e207131d63a7f706cffdcdc37d8f600c56187123ec62823ff44
+      name: build
+      script: |-
+        set -o verbose
+        mkdir -p ~/.ssh
+        if [ -e "/ssh/error" ]; then
+          #no server could be provisioned
+          cat /ssh/error
           exit 1
+        elif [ -e "/ssh/otp" ]; then
+         curl --cacert /ssh/otp-ca -XPOST -d @/ssh/otp $(cat /ssh/otp-server) >~/.ssh/id_rsa
+         echo "" >> ~/.ssh/id_rsa
+        else
+          cp /ssh/id_rsa ~/.ssh
         fi
-        http_code=$(curl -s -L -w "%{http_code}" --output "$dockerfile_path.dockerignore.tmp" "$DOCKERFILE.dockerignore")
-        if [ $http_code = 200 ]; then
-          echo "Fetched .dockerignore from $DOCKERFILE.dockerignore"
-          mv "$dockerfile_path.dockerignore.tmp" $SOURCE_CODE_DIR/$CONTEXT/.dockerignore
+        chmod 0400 ~/.ssh/id_rsa
+        export SSH_HOST=$(cat /ssh/host)
+        export BUILD_DIR=$(cat /ssh/user-dir)
+        export SSH_ARGS="-o StrictHostKeyChecking=no"
+        mkdir -p scripts
+        echo "$BUILD_DIR"
+        ssh $SSH_ARGS "$SSH_HOST"  mkdir -p "$BUILD_DIR/workspaces" "$BUILD_DIR/scripts"
+
+        PORT_FORWARD=""
+        PODMAN_PORT_FORWARD=""
+        if [ -n "$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR" ] ; then
+        PORT_FORWARD=" -L 80:$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR:80"
+        PODMAN_PORT_FORWARD=" -e JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR=localhost"
         fi
-      else
-        echo "Cannot find Dockerfile $DOCKERFILE"
-        exit 1
-      fi
-      if [ -n "$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR" ] && grep -q '^\s*RUN \(./\)\?mvn' "$dockerfile_path"; then
-        sed -i -e "s|^\s*RUN \(\(./\)\?mvn\)\(.*\)|RUN echo \"<settings><mirrors><mirror><id>mirror.default</id><url>http://$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR/v1/cache/default/0/</url><mirrorOf>*</mirrorOf></mirror></mirrors></settings>\" > /tmp/settings.yaml; \1 -s /tmp/settings.yaml \3|g" "$dockerfile_path"
-        touch /var/lib/containers/java
-      fi
 
-      # Fixing group permission on /var/lib/containers
-      chown root:root /var/lib/containers
-
-      sed -i 's/^\s*short-name-mode\s*=\s*.*/short-name-mode = "disabled"/' /etc/containers/registries.conf
-
-      # Setting new namespace to run buildah - 2^32-2
-      echo 'root:1:4294967294' | tee -a /etc/subuid >> /etc/subgid
-
-      if [ "${HERMETIC}" == "true" ]; then
-        BUILDAH_ARGS="--pull=never"
-        UNSHARE_ARGS="--net"
-        for image in $(grep -i '^\s*FROM' "$dockerfile_path" | sed 's/--platform=\S*//' | awk '{print $2}'); do
-          if [ "${image}" != "scratch" ]; then
-            unshare -Ufp --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah pull $image
+        rsync -ra $(workspaces.source.path)/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
+        rsync -ra "$HOME/.docker/" "$SSH_HOST:$BUILD_DIR/.docker/"
+        rsync -ra "/tekton/results/" "$SSH_HOST:$BUILD_DIR/tekton-results/"
+        cat >scripts/script-build.sh <<'REMOTESSHEOF'
+        #!/bin/bash
+        set -o verbose
+        set -e
+        cd $(workspaces.source.path)
+        SOURCE_CODE_DIR=source
+        if [ -e "$SOURCE_CODE_DIR/$CONTEXT/$DOCKERFILE" ]; then
+          dockerfile_path="$SOURCE_CODE_DIR/$CONTEXT/$DOCKERFILE"
+        elif [ -e "$SOURCE_CODE_DIR/$DOCKERFILE" ]; then
+          dockerfile_path="$SOURCE_CODE_DIR/$DOCKERFILE"
+        elif echo "$DOCKERFILE" | grep -q "^https\?://"; then
+          echo "Fetch Dockerfile from $DOCKERFILE"
+          dockerfile_path=$(mktemp --suffix=-Dockerfile)
+          http_code=$(curl -s -L -w "%{http_code}" --output "$dockerfile_path" "$DOCKERFILE")
+          if [ $http_code != 200 ]; then
+            echo "No Dockerfile is fetched. Server responds $http_code"
+            exit 1
           fi
-        done
-        echo "Build will be executed with network isolation"
-      fi
-
-      if [ -n "${PREFETCH_INPUT}" ]; then
-        cp -r cachi2 /tmp/
-        chmod -R go+rwX /tmp/cachi2
-        VOLUME_MOUNTS="--volume /tmp/cachi2:/cachi2"
-        sed -i 's|^\s*run |RUN . /cachi2/cachi2.env \&\& \\\n    |i' "$dockerfile_path"
-        echo "Prefetched content will be made available"
-      fi
-
-      # if yum repofiles stored in git, copy them to mount point outside the source dir
-      if [ -d "${SOURCE_CODE_DIR}/${YUM_REPOS_D_SRC}" ]; then
-        mkdir -p ${YUM_REPOS_D_FETCHED}
-        cp -r ${SOURCE_CODE_DIR}/${YUM_REPOS_D_SRC}/* ${YUM_REPOS_D_FETCHED}
-      fi
-
-      # if anything in the repofiles mount point (either fetched or from git), mount it
-      if [ -d "${YUM_REPOS_D_FETCHED}" ]; then
-        chmod -R go+rwX ${YUM_REPOS_D_FETCHED}
-        mount_point=$(realpath ${YUM_REPOS_D_FETCHED})
-        VOLUME_MOUNTS="${VOLUME_MOUNTS} --volume ${mount_point}:${YUM_REPOS_D_TARGET}"
-      fi
-
-      LABELS=(
-        "--label" "build-date=$(date -u +'%Y-%m-%dT%H:%M:%S')"
-        "--label" "architecture=$(uname -m)"
-        "--label" "vcs-type=git"
-      )
-      [ -n "$COMMIT_SHA" ] && LABELS+=("--label" "vcs-ref=$COMMIT_SHA")
-      [ -n "$IMAGE_EXPIRES_AFTER" ] && LABELS+=("--label" "quay.expires-after=$IMAGE_EXPIRES_AFTER")
-
-      unshare -Uf $UNSHARE_ARGS --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah build \
-        $VOLUME_MOUNTS \
-        $BUILDAH_ARGS \
-        ${LABELS[@]} \
-        --tls-verify=$TLSVERIFY --no-cache \
-        --ulimit nofile=4096:4096 \
-        -f "$dockerfile_path" -t $IMAGE $SOURCE_CODE_DIR/$CONTEXT
-
-      container=$(buildah from --pull-never $IMAGE)
-      buildah mount $container | tee /workspace/container_path
-      echo $container > /workspace/container_name
-
-      # Save the SBOM produced by Cachi2 so it can be merged into the final SBOM later
-      if [ -n "${PREFETCH_INPUT}" ]; then
-        cp /tmp/cachi2/output/bom.json ./sbom-cachi2.json
-      fi
-
-      # Expose base image digests
-      buildah images --format '{{ .Name }}:{{ .Tag }}@{{ .Digest }}' | grep -v $IMAGE > $(results.BASE_IMAGES_DIGESTS.path)
-
-      buildah push "$IMAGE" oci:rhtap-final-image
-      REMOTESSHEOF
-      chmod +x scripts/script-build.sh
-      rsync -ra scripts "$SSH_HOST:$BUILD_DIR"
-      ssh $SSH_ARGS "$SSH_HOST" $PORT_FORWARD podman  run $PODMAN_PORT_FORWARD \
-       -e BUILDAH_FORMAT="$BUILDAH_FORMAT" \
-       -e STORAGE_DRIVER="$STORAGE_DRIVER" \
-       -e HERMETIC="$HERMETIC" \
-       -e PREFETCH_INPUT="$PREFETCH_INPUT" \
-       -e CONTEXT="$CONTEXT" \
-       -e DOCKERFILE="$DOCKERFILE" \
-       -e IMAGE="$IMAGE" \
-       -e TLSVERIFY="$TLSVERIFY" \
-       -e IMAGE_EXPIRES_AFTER="$IMAGE_EXPIRES_AFTER" \
-       -e YUM_REPOS_D_SRC="$YUM_REPOS_D_SRC" \
-       -e YUM_REPOS_D_FETCHED="$YUM_REPOS_D_FETCHED" \
-       -e YUM_REPOS_D_TARGET="$YUM_REPOS_D_TARGET" \
-       -e COMMIT_SHA="$COMMIT_SHA" \
-       -v "$BUILD_DIR/workspaces/source:$(workspaces.source.path):Z" \
-       -v "$BUILD_DIR/.docker/:/root/.docker:Z" \
-       -v "$BUILD_DIR/tekton-results/:/tekton/results:Z" \
-       -v $BUILD_DIR/scripts:/script:Z \
-      --user=0  --rm  "$BUILDER_IMAGE" /script/script-build.sh
-      rsync -ra "$SSH_HOST:$BUILD_DIR/workspaces/source/" "$(workspaces.source.path)/"
-      rsync -ra "$SSH_HOST:$BUILD_DIR/tekton-results/" "/tekton/results/"
-      buildah pull oci:rhtap-final-image
-      buildah images
-      buildah tag localhost/rhtap-final-image "$IMAGE"
-      container=$(buildah from --pull-never "$IMAGE")
-      buildah mount "$container" | tee /workspace/container_path
-      echo $container > /workspace/container_name
-    securityContext:
-      capabilities:
-        add:
-        - SETFCAP
-    volumeMounts:
-    - mountPath: /var/lib/containers
-      name: varlibcontainers
-    - mountPath: /ssh
-      name: ssh
-      readOnly: true
-    workingDir: $(workspaces.source.path)
-  - computeResources: {}
-    image: quay.io/redhat-appstudio/syft:v0.98.0@sha256:4d3856e6a2622700b9a9d5d74d9aaf5d8a55671653f80bf6c636677658680ede
-    name: sbom-syft-generate
-    script: |
-      syft dir:$(workspaces.source.path)/source --output cyclonedx-json=$(workspaces.source.path)/sbom-source.json
-      find $(cat /workspace/container_path) -xtype l -delete
-      syft dir:$(cat /workspace/container_path) --output cyclonedx-json=$(workspaces.source.path)/sbom-image.json
-    volumeMounts:
-    - mountPath: /var/lib/containers
-      name: varlibcontainers
-  - computeResources: {}
-    image: quay.io/redhat-appstudio/hacbs-jvm-build-request-processor:127ee0c223a2b56a9bd20a6f2eaeed3bd6015f77
-    name: analyse-dependencies-java-sbom
-    script: |
-      if [ -f /var/lib/containers/java ]; then
-        /opt/jboss/container/java/run/run-java.sh analyse-dependencies path $(cat /workspace/container_path) -s $(workspaces.source.path)/sbom-image.json --task-run-name $(context.taskRun.name) --publishers $(results.SBOM_JAVA_COMPONENTS_COUNT.path)
-        sed -i 's/^/ /' $(results.SBOM_JAVA_COMPONENTS_COUNT.path) # Workaround for SRVKP-2875
-      else
-        touch $(results.JAVA_COMMUNITY_DEPENDENCIES.path)
-      fi
-    securityContext:
-      runAsUser: 0
-    volumeMounts:
-    - mountPath: /var/lib/containers
-      name: varlibcontainers
-  - computeResources: {}
-    image: registry.access.redhat.com/ubi9/python-39:1-158@sha256:967000729b17efdea309e297f4b1961c38b902a1ef18f6d886b8086c2a12f01f
-    name: merge-syft-sboms
-    script: |
-      #!/bin/python3
-      import json
-
-      # load SBOMs
-      with open("./sbom-image.json") as f:
-        image_sbom = json.load(f)
-
-      with open("./sbom-source.json") as f:
-        source_sbom = json.load(f)
-
-      # fetch unique components from available SBOMs
-      def get_identifier(component):
-        return component["name"] + '@' + component.get("version", "")
-
-      image_sbom_components = image_sbom.get("components", [])
-      existing_components = [get_identifier(component) for component in image_sbom_components]
-
-      source_sbom_components = source_sbom.get("components", [])
-      for component in source_sbom_components:
-        if get_identifier(component) not in existing_components:
-          image_sbom_components.append(component)
-          existing_components.append(get_identifier(component))
-
-      image_sbom_components.sort(key=lambda c: get_identifier(c))
-
-      # write the CycloneDX unified SBOM
-      with open("./sbom-cyclonedx.json", "w") as f:
-        json.dump(image_sbom, f, indent=4)
-    securityContext:
-      runAsUser: 0
-    workingDir: $(workspaces.source.path)
-  - computeResources: {}
-    image: quay.io/redhat-appstudio/cachi2:0.4.0@sha256:001acfbad47e132a90998d45076a0dbe0d8beacf0bec12b4d9a5aa796f4a9cad
-    name: merge-cachi2-sbom
-    script: |
-      if [ -n "${PREFETCH_INPUT}" ]; then
-        echo "Merging contents of sbom-cachi2.json into sbom-cyclonedx.json"
-        /src/utils/merge_syft_sbom.py sbom-cachi2.json sbom-cyclonedx.json > sbom-temp.json
-        mv sbom-temp.json sbom-cyclonedx.json
-      else
-        echo "Skipping step since no Cachi2 SBOM was produced"
-      fi
-    securityContext:
-      runAsUser: 0
-    workingDir: $(workspaces.source.path)
-  - computeResources: {}
-    image: registry.access.redhat.com/ubi9/python-39:1-158@sha256:967000729b17efdea309e297f4b1961c38b902a1ef18f6d886b8086c2a12f01f
-    name: create-purl-sbom
-    script: |
-      #!/bin/python3
-      import json
-
-      with open("./sbom-cyclonedx.json") as f:
-        cyclonedx_sbom = json.load(f)
-
-      purls = [{"purl": component["purl"]} for component in cyclonedx_sbom.get("components", []) if "purl" in component]
-      purl_content = {"image_contents": {"dependencies": purls}}
-
-      with open("sbom-purl.json", "w") as output_file:
-        json.dump(purl_content, output_file, indent=4)
-    securityContext:
-      runAsUser: 0
-    workingDir: $(workspaces.source.path)
-  - computeResources: {}
-    image: $(params.BUILDER_IMAGE)
-    name: inject-sbom-and-push
-    script: |
-      base_image_name=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.name"}}' $IMAGE | cut -f1 -d'@')
-      base_image_digest=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.digest"}}' $IMAGE)
-      container=$(buildah from --pull-never $IMAGE)
-      buildah copy $container sbom-cyclonedx.json sbom-purl.json /root/buildinfo/content_manifests/
-      buildah config -a org.opencontainers.image.base.name=${base_image_name} -a org.opencontainers.image.base.digest=${base_image_digest} $container
-      buildah commit $container $IMAGE
-
-      status=-1
-      max_run=5
-      sleep_sec=10
-      for run in $(seq 1 $max_run); do
-        status=0
-        [ "$run" -gt 1 ] && sleep $sleep_sec
-        echo "Pushing sbom image to registry"
-        buildah push \
-          --tls-verify=$TLSVERIFY \
-          --digestfile $(workspaces.source.path)/image-digest $IMAGE \
-          docker://$IMAGE && break || status=$?
-      done
-      if [ "$status" -ne 0 ]; then
-          echo "Failed to push sbom image to registry after ${max_run} tries"
+          http_code=$(curl -s -L -w "%{http_code}" --output "$dockerfile_path.dockerignore.tmp" "$DOCKERFILE.dockerignore")
+          if [ $http_code = 200 ]; then
+            echo "Fetched .dockerignore from $DOCKERFILE.dockerignore"
+            mv "$dockerfile_path.dockerignore.tmp" $SOURCE_CODE_DIR/$CONTEXT/.dockerignore
+          fi
+        else
+          echo "Cannot find Dockerfile $DOCKERFILE"
           exit 1
-      fi
+        fi
+        if [ -n "$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR" ] && grep -q '^\s*RUN \(./\)\?mvn' "$dockerfile_path"; then
+          sed -i -e "s|^\s*RUN \(\(./\)\?mvn\)\(.*\)|RUN echo \"<settings><mirrors><mirror><id>mirror.default</id><url>http://$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR/v1/cache/default/0/</url><mirrorOf>*</mirrorOf></mirror></mirrors></settings>\" > /tmp/settings.yaml; \1 -s /tmp/settings.yaml \3|g" "$dockerfile_path"
+          touch /var/lib/containers/java
+        fi
 
-      cat "$(workspaces.source.path)"/image-digest | tee $(results.IMAGE_DIGEST.path)
-      echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
-    securityContext:
-      capabilities:
-        add:
-        - SETFCAP
-      runAsUser: 0
-    volumeMounts:
-    - mountPath: /var/lib/containers
-      name: varlibcontainers
-    workingDir: $(workspaces.source.path)
-  - args:
-    - attach
-    - sbom
-    - --sbom
-    - sbom-cyclonedx.json
-    - --type
-    - cyclonedx
-    - $(params.IMAGE)
-    computeResources: {}
-    image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
-    name: upload-sbom
-    workingDir: $(workspaces.source.path)
+        # Fixing group permission on /var/lib/containers
+        chown root:root /var/lib/containers
+
+        sed -i 's/^\s*short-name-mode\s*=\s*.*/short-name-mode = "disabled"/' /etc/containers/registries.conf
+
+        # Setting new namespace to run buildah - 2^32-2
+        echo 'root:1:4294967294' | tee -a /etc/subuid >> /etc/subgid
+
+        if [ "${HERMETIC}" == "true" ]; then
+          BUILDAH_ARGS="--pull=never"
+          UNSHARE_ARGS="--net"
+          for image in $(grep -i '^\s*FROM' "$dockerfile_path" | sed 's/--platform=\S*//' | awk '{print $2}'); do
+            if [ "${image}" != "scratch" ]; then
+              unshare -Ufp --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah pull $image
+            fi
+          done
+          echo "Build will be executed with network isolation"
+        fi
+
+        if [ -n "${PREFETCH_INPUT}" ]; then
+          cp -r cachi2 /tmp/
+          chmod -R go+rwX /tmp/cachi2
+          VOLUME_MOUNTS="--volume /tmp/cachi2:/cachi2"
+          sed -i 's|^\s*run |RUN . /cachi2/cachi2.env \&\& \\\n    |i' "$dockerfile_path"
+          echo "Prefetched content will be made available"
+        fi
+
+        # if yum repofiles stored in git, copy them to mount point outside the source dir
+        if [ -d "${SOURCE_CODE_DIR}/${YUM_REPOS_D_SRC}" ]; then
+          mkdir -p ${YUM_REPOS_D_FETCHED}
+          cp -r ${SOURCE_CODE_DIR}/${YUM_REPOS_D_SRC}/* ${YUM_REPOS_D_FETCHED}
+        fi
+
+        # if anything in the repofiles mount point (either fetched or from git), mount it
+        if [ -d "${YUM_REPOS_D_FETCHED}" ]; then
+          chmod -R go+rwX ${YUM_REPOS_D_FETCHED}
+          mount_point=$(realpath ${YUM_REPOS_D_FETCHED})
+          VOLUME_MOUNTS="${VOLUME_MOUNTS} --volume ${mount_point}:${YUM_REPOS_D_TARGET}"
+        fi
+
+        LABELS=(
+          "--label" "build-date=$(date -u +'%Y-%m-%dT%H:%M:%S')"
+          "--label" "architecture=$(uname -m)"
+          "--label" "vcs-type=git"
+        )
+        [ -n "$COMMIT_SHA" ] && LABELS+=("--label" "vcs-ref=$COMMIT_SHA")
+        [ -n "$IMAGE_EXPIRES_AFTER" ] && LABELS+=("--label" "quay.expires-after=$IMAGE_EXPIRES_AFTER")
+
+        unshare -Uf $UNSHARE_ARGS --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah build \
+          $VOLUME_MOUNTS \
+          $BUILDAH_ARGS \
+          ${LABELS[@]} \
+          --tls-verify=$TLSVERIFY --no-cache \
+          --ulimit nofile=4096:4096 \
+          -f "$dockerfile_path" -t $IMAGE $SOURCE_CODE_DIR/$CONTEXT
+
+        container=$(buildah from --pull-never $IMAGE)
+        buildah mount $container | tee /workspace/container_path
+        echo $container > /workspace/container_name
+
+        # Save the SBOM produced by Cachi2 so it can be merged into the final SBOM later
+        if [ -n "${PREFETCH_INPUT}" ]; then
+          cp /tmp/cachi2/output/bom.json ./sbom-cachi2.json
+        fi
+
+        # Expose base image digests
+        buildah images --format '{{ .Name }}:{{ .Tag }}@{{ .Digest }}' | grep -v $IMAGE > $(results.BASE_IMAGES_DIGESTS.path)
+
+        buildah push "$IMAGE" oci:rhtap-final-image
+        REMOTESSHEOF
+        chmod +x scripts/script-build.sh
+        rsync -ra scripts "$SSH_HOST:$BUILD_DIR"
+        ssh $SSH_ARGS "$SSH_HOST" $PORT_FORWARD podman  run $PODMAN_PORT_FORWARD \
+         -e BUILDAH_FORMAT="$BUILDAH_FORMAT" \
+         -e STORAGE_DRIVER="$STORAGE_DRIVER" \
+         -e HERMETIC="$HERMETIC" \
+         -e PREFETCH_INPUT="$PREFETCH_INPUT" \
+         -e CONTEXT="$CONTEXT" \
+         -e DOCKERFILE="$DOCKERFILE" \
+         -e IMAGE="$IMAGE" \
+         -e TLSVERIFY="$TLSVERIFY" \
+         -e IMAGE_EXPIRES_AFTER="$IMAGE_EXPIRES_AFTER" \
+         -e YUM_REPOS_D_SRC="$YUM_REPOS_D_SRC" \
+         -e YUM_REPOS_D_FETCHED="$YUM_REPOS_D_FETCHED" \
+         -e YUM_REPOS_D_TARGET="$YUM_REPOS_D_TARGET" \
+         -e COMMIT_SHA="$COMMIT_SHA" \
+         -v "$BUILD_DIR/workspaces/source:$(workspaces.source.path):Z" \
+         -v "$BUILD_DIR/.docker/:/root/.docker:Z" \
+         -v "$BUILD_DIR/tekton-results/:/tekton/results:Z" \
+         -v $BUILD_DIR/scripts:/script:Z \
+        --user=0  --rm  "$BUILDER_IMAGE" /script/script-build.sh
+        rsync -ra "$SSH_HOST:$BUILD_DIR/workspaces/source/" "$(workspaces.source.path)/"
+        rsync -ra "$SSH_HOST:$BUILD_DIR/tekton-results/" "/tekton/results/"
+        buildah pull oci:rhtap-final-image
+        buildah images
+        buildah tag localhost/rhtap-final-image "$IMAGE"
+        container=$(buildah from --pull-never "$IMAGE")
+        buildah mount "$container" | tee /workspace/container_path
+        echo $container > /workspace/container_name
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+        - mountPath: /ssh
+          name: ssh
+          readOnly: true
+      workingDir: $(workspaces.source.path)
+    - computeResources: {}
+      image: quay.io/redhat-appstudio/syft:v0.98.0@sha256:4d3856e6a2622700b9a9d5d74d9aaf5d8a55671653f80bf6c636677658680ede
+      name: sbom-syft-generate
+      script: |
+        syft dir:$(workspaces.source.path)/source --output cyclonedx-json=$(workspaces.source.path)/sbom-source.json
+        find $(cat /workspace/container_path) -xtype l -delete
+        syft dir:$(cat /workspace/container_path) --output cyclonedx-json=$(workspaces.source.path)/sbom-image.json
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+    - computeResources: {}
+      image: quay.io/redhat-appstudio/hacbs-jvm-build-request-processor:127ee0c223a2b56a9bd20a6f2eaeed3bd6015f77
+      name: analyse-dependencies-java-sbom
+      script: |
+        if [ -f /var/lib/containers/java ]; then
+          /opt/jboss/container/java/run/run-java.sh analyse-dependencies path $(cat /workspace/container_path) -s $(workspaces.source.path)/sbom-image.json --task-run-name $(context.taskRun.name) --publishers $(results.SBOM_JAVA_COMPONENTS_COUNT.path)
+          sed -i 's/^/ /' $(results.SBOM_JAVA_COMPONENTS_COUNT.path) # Workaround for SRVKP-2875
+        else
+          touch $(results.JAVA_COMMUNITY_DEPENDENCIES.path)
+        fi
+      securityContext:
+        runAsUser: 0
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+    - computeResources: {}
+      image: registry.access.redhat.com/ubi9/python-39:1-158@sha256:967000729b17efdea309e297f4b1961c38b902a1ef18f6d886b8086c2a12f01f
+      name: merge-syft-sboms
+      script: |
+        #!/bin/python3
+        import json
+
+        # load SBOMs
+        with open("./sbom-image.json") as f:
+          image_sbom = json.load(f)
+
+        with open("./sbom-source.json") as f:
+          source_sbom = json.load(f)
+
+        # fetch unique components from available SBOMs
+        def get_identifier(component):
+          return component["name"] + '@' + component.get("version", "")
+
+        image_sbom_components = image_sbom.get("components", [])
+        existing_components = [get_identifier(component) for component in image_sbom_components]
+
+        source_sbom_components = source_sbom.get("components", [])
+        for component in source_sbom_components:
+          if get_identifier(component) not in existing_components:
+            image_sbom_components.append(component)
+            existing_components.append(get_identifier(component))
+
+        image_sbom_components.sort(key=lambda c: get_identifier(c))
+
+        # write the CycloneDX unified SBOM
+        with open("./sbom-cyclonedx.json", "w") as f:
+          json.dump(image_sbom, f, indent=4)
+      securityContext:
+        runAsUser: 0
+      workingDir: $(workspaces.source.path)
+    - computeResources: {}
+      image: quay.io/redhat-appstudio/cachi2:0.4.0@sha256:001acfbad47e132a90998d45076a0dbe0d8beacf0bec12b4d9a5aa796f4a9cad
+      name: merge-cachi2-sbom
+      script: |
+        if [ -n "${PREFETCH_INPUT}" ]; then
+          echo "Merging contents of sbom-cachi2.json into sbom-cyclonedx.json"
+          /src/utils/merge_syft_sbom.py sbom-cachi2.json sbom-cyclonedx.json > sbom-temp.json
+          mv sbom-temp.json sbom-cyclonedx.json
+        else
+          echo "Skipping step since no Cachi2 SBOM was produced"
+        fi
+      securityContext:
+        runAsUser: 0
+      workingDir: $(workspaces.source.path)
+    - computeResources: {}
+      image: registry.access.redhat.com/ubi9/python-39:1-158@sha256:967000729b17efdea309e297f4b1961c38b902a1ef18f6d886b8086c2a12f01f
+      name: create-purl-sbom
+      script: |
+        #!/bin/python3
+        import json
+
+        with open("./sbom-cyclonedx.json") as f:
+          cyclonedx_sbom = json.load(f)
+
+        purls = [{"purl": component["purl"]} for component in cyclonedx_sbom.get("components", []) if "purl" in component]
+        purl_content = {"image_contents": {"dependencies": purls}}
+
+        with open("sbom-purl.json", "w") as output_file:
+          json.dump(purl_content, output_file, indent=4)
+      securityContext:
+        runAsUser: 0
+      workingDir: $(workspaces.source.path)
+    - computeResources: {}
+      image: $(params.BUILDER_IMAGE)
+      name: inject-sbom-and-push
+      script: |
+        base_image_name=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.name"}}' $IMAGE | cut -f1 -d'@')
+        base_image_digest=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.digest"}}' $IMAGE)
+        container=$(buildah from --pull-never $IMAGE)
+        buildah copy $container sbom-cyclonedx.json sbom-purl.json /root/buildinfo/content_manifests/
+        buildah config -a org.opencontainers.image.base.name=${base_image_name} -a org.opencontainers.image.base.digest=${base_image_digest} $container
+        buildah commit $container $IMAGE
+
+        status=-1
+        max_run=5
+        sleep_sec=10
+        for run in $(seq 1 $max_run); do
+          status=0
+          [ "$run" -gt 1 ] && sleep $sleep_sec
+          echo "Pushing sbom image to registry"
+          buildah push \
+            --tls-verify=$TLSVERIFY \
+            --digestfile $(workspaces.source.path)/image-digest $IMAGE \
+            docker://$IMAGE && break || status=$?
+        done
+        if [ "$status" -ne 0 ]; then
+            echo "Failed to push sbom image to registry after ${max_run} tries"
+            exit 1
+        fi
+
+        cat "$(workspaces.source.path)"/image-digest | tee $(results.IMAGE_DIGEST.path)
+        echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
+        runAsUser: 0
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+      workingDir: $(workspaces.source.path)
+    - args:
+        - attach
+        - sbom
+        - --sbom
+        - sbom-cyclonedx.json
+        - --type
+        - cyclonedx
+        - $(params.IMAGE)
+      computeResources: {}
+      image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
+      name: upload-sbom
+      workingDir: $(workspaces.source.path)
   volumes:
-  - emptyDir: {}
-    name: varlibcontainers
-  - name: ssh
-    secret:
-      optional: false
-      secretName: multi-platform-ssh-$(context.taskRun.name)
+    - emptyDir: {}
+      name: varlibcontainers
+    - name: ssh
+      secret:
+        optional: false
+        secretName: multi-platform-ssh-$(context.taskRun.name)
   workspaces:
-  - description: Workspace containing the source code to build.
-    name: source
+    - description: Workspace containing the source code to build.
+      name: source

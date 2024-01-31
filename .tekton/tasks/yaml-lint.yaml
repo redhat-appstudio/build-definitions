@@ -23,7 +23,7 @@ spec:
       default: ["--help"]
   steps:
     - name: lint-yaml-files
-      image: docker.io/cytopia/yamllint:1.26@sha256:1bf8270a671a2e5f2fea8ac2e80164d627e0c5fa083759862bbde80628f942b2  # tag: 1.23
+      image: docker.io/cytopia/yamllint:1.26@sha256:1bf8270a671a2e5f2fea8ac2e80164d627e0c5fa083759862bbde80628f942b2 # tag: 1.23
       # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
       # the cluster will set imagePullPolicy to IfNotPresent
       # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.

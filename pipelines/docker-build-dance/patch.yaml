@@ -1,4 +1,3 @@
----
 - op: replace
   path: /metadata/name
   value: docker-build-dance
@@ -28,16 +27,16 @@
 - op: add
   path: /spec/tasks/3/params
   value:
-  - name: IMAGE
-    value: $(params.output-image)
-  - name: DOCKERFILE
-    value: $(params.dockerfile)
-  - name: CONTEXT
-    value: $(params.path-context)
-  - name: IMAGE_EXPIRES_AFTER
-    value: "$(params.image-expires-after)"
-  - name: COMMIT_SHA
-    value: "$(tasks.clone-repository.results.commit)"
+    - name: IMAGE
+      value: $(params.output-image)
+    - name: DOCKERFILE
+      value: $(params.dockerfile)
+    - name: CONTEXT
+      value: $(params.path-context)
+    - name: IMAGE_EXPIRES_AFTER
+      value: "$(params.image-expires-after)"
+    - name: COMMIT_SHA
+      value: "$(tasks.clone-repository.results.commit)"
 # Remove tasks
 # Example - yq .spec.tasks.[].name ../build-definitions/pipelines/template-build/template-build.yaml | nl -v 0
 # to compute offsets
@@ -55,30 +54,30 @@
   path: /spec/tasks/3/runAfter/0
   value: clone-repository
 - op: remove
-  path: /spec/tasks/9  # sbom-json-check
+  path: /spec/tasks/9 # sbom-json-check
 - op: remove
-  path: /spec/tasks/8  # clamav-scan
+  path: /spec/tasks/8 # clamav-scan
 - op: remove
-  path: /spec/tasks/7  # sast-snyk-check
+  path: /spec/tasks/7 # sast-snyk-check
 - op: remove
-  path: /spec/tasks/5  # deprecated-base-image-check
+  path: /spec/tasks/5 # deprecated-base-image-check
 - op: remove
-  path: /spec/tasks/2  # prefetch-dependencies
+  path: /spec/tasks/2 # prefetch-dependencies
 - op: add
   path: /spec/tasks/-
   value:
     name: acs-image-check
     params:
-    - name: rox_central_endpoint
-      value: $(params.stackrox-endpoint)
-    - name: rox_api_token
-      value: $(params.stackrox-secret)
-    - name: image
-      value: $(params.output-image)
-    - name: insecure-skip-tls-verify
-      value: "true"
-    - name: image_digest
-      value: $(tasks.build-container.results.IMAGE_DIGEST)
+      - name: rox_central_endpoint
+        value: $(params.stackrox-endpoint)
+      - name: rox_api_token
+        value: $(params.stackrox-secret)
+      - name: image
+        value: $(params.output-image)
+      - name: insecure-skip-tls-verify
+        value: "true"
+      - name: image_digest
+        value: $(tasks.build-container.results.IMAGE_DIGEST)
     runAfter:
       - build-container
     taskRef:
@@ -91,18 +90,18 @@
   value:
     name: acs-image-scan
     params:
-    - name: rox_central_endpoint
-      value: $(params.stackrox-endpoint)
-    - name: rox_api_token
-      value: $(params.stackrox-secret)
-    - name: image
-      value: $(params.output-image)
-    - name: insecure-skip-tls-verify
-      value: "true"
-    - name: image_digest
-      value: $(tasks.build-container.results.IMAGE_DIGEST)
+      - name: rox_central_endpoint
+        value: $(params.stackrox-endpoint)
+      - name: rox_api_token
+        value: $(params.stackrox-secret)
+      - name: image
+        value: $(params.output-image)
+      - name: insecure-skip-tls-verify
+        value: "true"
+      - name: image_digest
+        value: $(tasks.build-container.results.IMAGE_DIGEST)
     runAfter:
-    - build-container
+      - build-container
     taskRef:
       kind: Task
       name: acs-image-scan
@@ -111,14 +110,14 @@
   value:
     name: acs-deploy-check
     params:
-    - name: rox_central_endpoint
-      value: $(params.stackrox-endpoint)
-    - name: rox_api_token
-      value: $(params.stackrox-secret)
-    - name: insecure-skip-tls-verify
-      value: "true"
+      - name: rox_central_endpoint
+        value: $(params.stackrox-endpoint)
+      - name: rox_api_token
+        value: $(params.stackrox-secret)
+      - name: insecure-skip-tls-verify
+        value: "true"
     runAfter:
-    - build-container
+      - build-container
     taskRef:
       kind: Task
       name: acs-deploy-check

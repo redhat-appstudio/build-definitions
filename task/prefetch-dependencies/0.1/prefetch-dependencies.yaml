@@ -12,36 +12,36 @@ spec:
     Task that uses Cachi2 to prefetch build dependencies.
     See docs at https://github.com/containerbuildsystem/cachi2#basic-usage.
   params:
-  - description: Configures project packages that will have their dependencies prefetched.
-    name: input
+    - description: Configures project packages that will have their dependencies prefetched.
+      name: input
   steps:
-  - image: quay.io/redhat-appstudio/cachi2:0.4.0@sha256:001acfbad47e132a90998d45076a0dbe0d8beacf0bec12b4d9a5aa796f4a9cad
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    name: prefetch-dependencies
-    env:
-    - name: INPUT
-      value: $(params.input)
-    script: |
-      if [ -z "${INPUT}" ]
-      then
-        echo "Build will be executed with network isolation, but no content was configured to be prefetched."
-        exit 0
-      fi
+    - image: quay.io/redhat-appstudio/cachi2:0.4.0@sha256:001acfbad47e132a90998d45076a0dbe0d8beacf0bec12b4d9a5aa796f4a9cad
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      name: prefetch-dependencies
+      env:
+        - name: INPUT
+          value: $(params.input)
+      script: |
+        if [ -z "${INPUT}" ]
+        then
+          echo "Build will be executed with network isolation, but no content was configured to be prefetched."
+          exit 0
+        fi
 
-      cachi2 fetch-deps \
-      --source=$(workspaces.source.path)/source \
-      --output=$(workspaces.source.path)/cachi2/output \
-      "${INPUT}"
+        cachi2 fetch-deps \
+        --source=$(workspaces.source.path)/source \
+        --output=$(workspaces.source.path)/cachi2/output \
+        "${INPUT}"
 
-      cachi2 generate-env $(workspaces.source.path)/cachi2/output \
-      --format env \
-      --for-output-dir=/cachi2/output \
-      --output $(workspaces.source.path)/cachi2/cachi2.env
+        cachi2 generate-env $(workspaces.source.path)/cachi2/output \
+        --format env \
+        --for-output-dir=/cachi2/output \
+        --output $(workspaces.source.path)/cachi2/cachi2.env
 
-      cachi2 inject-files $(workspaces.source.path)/cachi2/output \
-      --for-output-dir=/cachi2/output
+        cachi2 inject-files $(workspaces.source.path)/cachi2/output \
+        --for-output-dir=/cachi2/output
   workspaces:
-  - name: source
-    description: Workspace with the source code, cachi2 artifacts will be stored on the workspace as well
+    - name: source
+      description: Workspace with the source code, cachi2 artifacts will be stored on the workspace as well

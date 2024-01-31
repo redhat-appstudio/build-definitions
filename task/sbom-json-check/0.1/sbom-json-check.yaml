@@ -1,4 +1,3 @@
----
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -17,64 +16,64 @@ spec:
     - description: Tekton task test output.
       name: TEST_OUTPUT
   steps:
-  - name: sbom-json-check
-    image: quay.io/redhat-appstudio/hacbs-test:v1.1.9@sha256:866675ee3064cf4768691ecca478063ce12f0556fb9d4f24ca95c98664ffbd43
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    securityContext:
-      runAsUser: 0
-      capabilities:
-        add:
-          - SETFCAP
-    volumeMounts:
-      - mountPath: /shared
-        name: shared
-    env:
-      - name: IMAGE_URL
-        value: $(params.IMAGE_URL)
-      - name: IMAGE_DIGEST
-        value: $(params.IMAGE_DIGEST)
-    script: |
-      #!/usr/bin/env bash
-      set -euo pipefail
-      source /utils.sh
-      trap 'handle_error $(results.TEST_OUTPUT.path)' EXIT
+    - name: sbom-json-check
+      image: quay.io/redhat-appstudio/hacbs-test:v1.1.9@sha256:866675ee3064cf4768691ecca478063ce12f0556fb9d4f24ca95c98664ffbd43
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      securityContext:
+        runAsUser: 0
+        capabilities:
+          add:
+            - SETFCAP
+      volumeMounts:
+        - mountPath: /shared
+          name: shared
+      env:
+        - name: IMAGE_URL
+          value: $(params.IMAGE_URL)
+        - name: IMAGE_DIGEST
+          value: $(params.IMAGE_DIGEST)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        source /utils.sh
+        trap 'handle_error $(results.TEST_OUTPUT.path)' EXIT
 
-      mkdir /manifests/ && cd /manifests/
+        mkdir /manifests/ && cd /manifests/
 
-      image_with_digest="${IMAGE_URL}@${IMAGE_DIGEST}"
+        image_with_digest="${IMAGE_URL}@${IMAGE_DIGEST}"
 
-      if ! oc image extract --registry-config ~/.docker/config.json "${image_with_digest}" --path '/root/buildinfo/content_manifests/*:/manifests/'; then
-        echo "Failed to extract manifests from image ${image_with_digest}."
-        note="Task $(context.task.name) failed: Failed to extract manifests from image ${image_with_digest} with oc extract. For details, check Tekton task log."
-        ERROR_OUTPUT=$(make_result_json -r "ERROR" -t "$note")
-      fi
-
-      touch fail_result.txt
-      if [ -f "sbom-cyclonedx.json" ]
-      then
-        result=$(echo -n $(sbom-utility validate --input-file sbom-cyclonedx.json))
-        if [[ ! $result =~ "SBOM valid against JSON schema: `true`" ]]
-        then
-          echo "sbom-cyclonedx.json: $result" > fail_result.txt
+        if ! oc image extract --registry-config ~/.docker/config.json "${image_with_digest}" --path '/root/buildinfo/content_manifests/*:/manifests/'; then
+          echo "Failed to extract manifests from image ${image_with_digest}."
+          note="Task $(context.task.name) failed: Failed to extract manifests from image ${image_with_digest} with oc extract. For details, check Tekton task log."
+          ERROR_OUTPUT=$(make_result_json -r "ERROR" -t "$note")
         fi
-      else
-        echo "Cannot access sbom-cyclonedx.json: No such file or directory exists." > fail_result.txt
-      fi
 
-      FAIL_RESULTS="$(cat fail_result.txt)"
-      if [[ -z $FAIL_RESULTS ]]
-      then
-        note="Task $(context.task.name) completed: Check result for JSON check result."
-        TEST_OUTPUT=$(make_result_json -r "SUCCESS" -s 1 -t "$note")
-      else
-        echo "Failed to verify sbom-cyclonedx.json for image $IMAGE_URL with reason: $FAIL_RESULTS."
-        note="Task $(context.task.name) failed: Failed to verify SBOM for image $IMAGE_URL."
-        ERROR_OUTPUT=$(make_result_json -r "FAILURE" -f 1 -t "$note")
-      fi
+        touch fail_result.txt
+        if [ -f "sbom-cyclonedx.json" ]
+        then
+          result=$(echo -n $(sbom-utility validate --input-file sbom-cyclonedx.json))
+          if [[ ! $result =~ "SBOM valid against JSON schema: `true`" ]]
+          then
+            echo "sbom-cyclonedx.json: $result" > fail_result.txt
+          fi
+        else
+          echo "Cannot access sbom-cyclonedx.json: No such file or directory exists." > fail_result.txt
+        fi
 
-      echo "${TEST_OUTPUT:-${ERROR_OUTPUT}}" | tee $(results.TEST_OUTPUT.path)
+        FAIL_RESULTS="$(cat fail_result.txt)"
+        if [[ -z $FAIL_RESULTS ]]
+        then
+          note="Task $(context.task.name) completed: Check result for JSON check result."
+          TEST_OUTPUT=$(make_result_json -r "SUCCESS" -s 1 -t "$note")
+        else
+          echo "Failed to verify sbom-cyclonedx.json for image $IMAGE_URL with reason: $FAIL_RESULTS."
+          note="Task $(context.task.name) failed: Failed to verify SBOM for image $IMAGE_URL."
+          ERROR_OUTPUT=$(make_result_json -r "FAILURE" -f 1 -t "$note")
+        fi
+
+        echo "${TEST_OUTPUT:-${ERROR_OUTPUT}}" | tee $(results.TEST_OUTPUT.path)
   volumes:
-  - name: shared
-    emptyDir: {}
+    - name: shared
+      emptyDir: {}

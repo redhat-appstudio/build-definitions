@@ -1,4 +1,3 @@
----
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -47,8 +46,8 @@ spec:
           - name: shared-workspace
             workspace: workspace
         params:
-        - name: args
-          value: [".", "-c", "/workspace/shared-workspace/source/.yamllint"]
+          - name: args
+            value: [".", "-c", "/workspace/shared-workspace/source/.yamllint"]
       - name: sast-snyk-check
         params:
           - name: SNYK_SECRET
@@ -167,9 +166,9 @@ spec:
                   subPath: .dockerconfigjson
                   name: quay-secret
           volumes:
-          - name: quay-secret
-            secret:
-              secretName: redhat-appstudio-tekton-catalog-build-definitions-pull-secret
+            - name: quay-secret
+              secret:
+                secretName: redhat-appstudio-tekton-catalog-build-definitions-pull-secret
           workspaces:
             - name: source
       - name: e2e-tests

@@ -12,132 +12,132 @@ spec:
   description: |-
     Creates and pushes a Tekton bundle containing the specified Tekton YAML files.
   params:
-  - description: Reference of the image task will produce.
-    name: IMAGE
-    type: string
-  - default: .
-    description: Path to the directory to use as context.
-    name: CONTEXT
-    type: string
-  - name: HOME
-    type: string
-    description: Value for the HOME environment variable.
-    default: /tekton/home
-  - name: STEPS_IMAGE
-    type: string
-    description: An optional image to configure task steps with in the bundle
-    default: ""
+    - description: Reference of the image task will produce.
+      name: IMAGE
+      type: string
+    - default: .
+      description: Path to the directory to use as context.
+      name: CONTEXT
+      type: string
+    - name: HOME
+      type: string
+      description: Value for the HOME environment variable.
+      default: /tekton/home
+    - name: STEPS_IMAGE
+      type: string
+      description: An optional image to configure task steps with in the bundle
+      default: ""
   results:
-  - description: Digest of the image just built
-    name: IMAGE_DIGEST
-  - description: Image repository where the built image was pushed with tag only
-    name: IMAGE_URL
+    - description: Digest of the image just built
+      name: IMAGE_DIGEST
+    - description: Image repository where the built image was pushed with tag only
+      name: IMAGE_URL
   stepTemplate:
     env:
-    - name: HOME
-      value: "$(params.HOME)"
-    - name: TASK_FILE
-      value: tekton_task_files
+      - name: HOME
+        value: "$(params.HOME)"
+      - name: TASK_FILE
+        value: tekton_task_files
   steps:
-  - image: registry.access.redhat.com/ubi9/toolbox@sha256:7391628396216c011ed3a310f1fa54c6a9221e36f7fa59c94ae7796de51e7a25
-    name: modify-task-files
-    env:
-    - name: CONTEXT
-      value: $(params.CONTEXT)
-    - name: STEPS_IMAGE
-      value: $(params.STEPS_IMAGE)
-    script: |
-      #!/bin/env bash
-      set -o errexit
-      set -o pipefail
-      set -o nounset
+    - image: registry.access.redhat.com/ubi9/toolbox@sha256:7391628396216c011ed3a310f1fa54c6a9221e36f7fa59c94ae7796de51e7a25
+      name: modify-task-files
+      env:
+        - name: CONTEXT
+          value: $(params.CONTEXT)
+        - name: STEPS_IMAGE
+          value: $(params.STEPS_IMAGE)
+      script: |
+        #!/bin/env bash
+        set -o errexit
+        set -o pipefail
+        set -o nounset
 
-      # expand '**', and don't return glob expression when no matches found
-      shopt -s globstar nullglob
+        # expand '**', and don't return glob expression when no matches found
+        shopt -s globstar nullglob
 
-      # read \$CONTEXT as an array split by comma or space into PATHS
-      IFS=', ' read -r -a PATHS <<< "$CONTEXT"
-      FILES=()
-      for path in "${PATHS[@]}"; do
-        # keeps current path expanded
-        paths=()
-        # are we negating the current path
-        neg=0
-        if [[ "${path}" == \!* ]]; then
-          neg=1
-          path="${path#\!}"
-        fi
-        if [[ -d "$(workspaces.source.path)/${path}" ]]; then
-          # for directories look for any .yaml or .yml files
-          paths+=(
-            $(workspaces.source.path)/${path}/**/*.yaml
-            $(workspaces.source.path)/${path}/**/*.yml
-          )
-        else
-          # for files add the file to the collected paths
-          paths+=("${path}")
-        fi
-        if [[ $neg == 0 ]]; then
-          # collect curent paths to FILES
-          FILES+=("${paths[@]}")
-        else
-          if [[ ${#PATHS[@]} -eq 1 ]]; then
-            # single negative path provided, first include everything then
-            # subtract the negative elements
-            FILES=(
-              $(workspaces.source.path)/**/*.yaml
-              $(workspaces.source.path)/**/*.yml
-            )
+        # read \$CONTEXT as an array split by comma or space into PATHS
+        IFS=', ' read -r -a PATHS <<< "$CONTEXT"
+        FILES=()
+        for path in "${PATHS[@]}"; do
+          # keeps current path expanded
+          paths=()
+          # are we negating the current path
+          neg=0
+          if [[ "${path}" == \!* ]]; then
+            neg=1
+            path="${path#\!}"
           fi
-          for p in "${paths[@]}"; do
-            # remove any collected paths from FILES, leaves blank elements in place
-            FILES=("${FILES[@]/$p/}")
-          done
-          # remove blank elements
-          TMP=("${FILES[@]}")
-          FILES=()
-          for p in "${TMP[@]}"; do
-            [[ -n "${p}" ]] && FILES+=("${p}")
+          if [[ -d "$(workspaces.source.path)/${path}" ]]; then
+            # for directories look for any .yaml or .yml files
+            paths+=(
+              $(workspaces.source.path)/${path}/**/*.yaml
+              $(workspaces.source.path)/${path}/**/*.yml
+            )
+          else
+            # for files add the file to the collected paths
+            paths+=("${path}")
+          fi
+          if [[ $neg == 0 ]]; then
+            # collect curent paths to FILES
+            FILES+=("${paths[@]}")
+          else
+            if [[ ${#PATHS[@]} -eq 1 ]]; then
+              # single negative path provided, first include everything then
+              # subtract the negative elements
+              FILES=(
+                $(workspaces.source.path)/**/*.yaml
+                $(workspaces.source.path)/**/*.yml
+              )
+            fi
+            for p in "${paths[@]}"; do
+              # remove any collected paths from FILES, leaves blank elements in place
+              FILES=("${FILES[@]/$p/}")
+            done
+            # remove blank elements
+            TMP=("${FILES[@]}")
+            FILES=()
+            for p in "${TMP[@]}"; do
+              [[ -n "${p}" ]] && FILES+=("${p}")
+            done
+          fi
+        done
+
+        if [[ -n "${STEPS_IMAGE}" ]]; then
+          for f in "${FILES[@]}"; do
+            yq e '(.spec.steps[] | select(has("image")).image) = "env(STEPS_IMAGE)"' -i $f
           done
         fi
-      done
 
-      if [[ -n "${STEPS_IMAGE}" ]]; then
-        for f in "${FILES[@]}"; do
-          yq e '(.spec.steps[] | select(has("image")).image) = "env(STEPS_IMAGE)"' -i $f
-        done
-      fi
+        printf "%s\n" "${FILES[@]}" > "${TASK_FILE}"
+      workingDir: $(workspaces.source.path)
+    - image: quay.io/openshift-pipeline/openshift-pipelines-cli-tkn:5.0
+      name: build
+      env:
+        - name: CONTEXT
+          value: $(params.CONTEXT)
+        - name: IMAGE
+          value: $(params.IMAGE)
+      script: |
+        #!/bin/env bash
 
-      printf "%s\n" "${FILES[@]}" > "${TASK_FILE}"
-    workingDir: $(workspaces.source.path)
-  - image: quay.io/openshift-pipeline/openshift-pipelines-cli-tkn:5.0
-    name: build
-    env:
-    - name: CONTEXT
-      value: $(params.CONTEXT)
-    - name: IMAGE
-      value: $(params.IMAGE)
-    script: |
-      #!/bin/env bash
+        set -o errexit
+        set -o pipefail
+        set -o nounset
 
-      set -o errexit
-      set -o pipefail
-      set -o nounset
+        mapfile -t FILES < "${TASK_FILE}"
+        [[ ${#FILES[@]} -eq 0 ]] \
+          && echo "No YAML files matched by \"$CONTEXT\" in \"$(workspaces.source.path)\", aborting the build" \
+          && exit 1
+        exec 3>&1;
 
-      mapfile -t FILES < "${TASK_FILE}"
-      [[ ${#FILES[@]} -eq 0 ]] \
-        && echo "No YAML files matched by \"$CONTEXT\" in \"$(workspaces.source.path)\", aborting the build" \
-        && exit 1
-      exec 3>&1;
+        OUT="$(tkn bundle push "$IMAGE" \
+          $(printf ' -f %s' "${FILES[@]}") \
+          |tee /proc/self/fd/3)"
+        echo -n "$IMAGE" > $(results.IMAGE_URL.path)
+        echo -n "${OUT#*Pushed Tekton Bundle to *@}" > $(results.IMAGE_DIGEST.path)
 
-      OUT="$(tkn bundle push "$IMAGE" \
-        $(printf ' -f %s' "${FILES[@]}") \
-        |tee /proc/self/fd/3)"
-      echo -n "$IMAGE" > $(results.IMAGE_URL.path)
-      echo -n "${OUT#*Pushed Tekton Bundle to *@}" > $(results.IMAGE_DIGEST.path)
-
-      # cleanup task file
-      [[ -f "${TASK_FILE}" ]] && rm -f "${TASK_FILE}"
-    workingDir: $(workspaces.source.path)
+        # cleanup task file
+        [[ -f "${TASK_FILE}" ]] && rm -f "${TASK_FILE}"
+      workingDir: $(workspaces.source.path)
   workspaces:
-  - name: source
+    - name: source

@@ -1,4 +1,3 @@
----
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -84,9 +83,9 @@ spec:
                   subPath: .dockerconfigjson
                   name: quay-secret
           volumes:
-          - name: quay-secret
-            secret:
-              secretName: redhat-appstudio-tekton-catalog-build-definitions-pull-secret
+            - name: quay-secret
+              secret:
+                secretName: redhat-appstudio-tekton-catalog-build-definitions-pull-secret
           workspaces:
             - name: source
       - name: update-infra-repo
@@ -113,9 +112,9 @@ spec:
             - name: artifacts
               description: Workspace containing arbitrary artifacts used during the task run.
           volumes:
-          - name: quay-secret
-            secret:
-              secretName: redhat-appstudio-tekton-catalog-build-definitions-pull-secret
+            - name: quay-secret
+              secret:
+                secretName: redhat-appstudio-tekton-catalog-build-definitions-pull-secret
           steps:
             - name: build-bundles
               image: quay.io/redhat-appstudio/appstudio-utils:{{ revision }}

@@ -9,9 +9,7 @@ metadata:
   name: fbc-validation
 spec:
   description: >-
-    Ensures file-based catalog (FBC) components are uniquely linted for proper construction as part of build pipeline.
-    The manifest data of container images obtained previously (via Skopeo) from inspect-image task is checked using OpenShift Operator Framework's opm CLI tool.
-    The opm binary is extracted from the container's base image, which must come from a trusted source.
+    Ensures file-based catalog (FBC) components are uniquely linted for proper construction as part of build pipeline. The manifest data of container images obtained previously (via Skopeo) from inspect-image task is checked using OpenShift Operator Framework's opm CLI tool. The opm binary is extracted from the container's base image, which must come from a trusted source.
   params:
     - name: IMAGE_URL
       description: Fully qualified image name.

@@ -33,7 +33,6 @@ spec:
       description: Defines if the image in param image-url should be built
     - name: container-registry-secret
       description: unused, should be removed in next task version
-
   steps:
     - name: init
       image: registry.redhat.io/openshift4/ose-cli:4.13@sha256:73df37794ffff7de1101016c23dc623e4990810390ebdabcbbfa065214352c7c

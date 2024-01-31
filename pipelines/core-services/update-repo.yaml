@@ -16,21 +16,21 @@
       name: update-infra-deployments
       version: "0.1"
     when:
-    - input: $(params.update-repo-script)
-      operator: notin
-      values: [""]
-    - input: $(params.update-repo-name)
-      operator: notin
-      values: [""]
-    - input: $(tasks.status)
-      operator: notin
-      values: ["Failed"]
+      - input: $(params.update-repo-script)
+        operator: notin
+        values: [""]
+      - input: $(params.update-repo-name)
+        operator: notin
+        values: [""]
+      - input: $(tasks.status)
+        operator: notin
+        values: ["Failed"]
     params:
-    - name: ORIGIN_REPO
-      value: $(params.git-url)
-    - name: REVISION
-      value: $(params.revision)
-    - name: SCRIPT
-      value: $(params.update-repo-script)
-    - name: TARGET_GH_REPO
-      value: $(params.update-repo-name)
+      - name: ORIGIN_REPO
+        value: $(params.git-url)
+      - name: REVISION
+        value: $(params.revision)
+      - name: SCRIPT
+        value: $(params.update-repo-script)
+      - name: TARGET_GH_REPO
+        value: $(params.update-repo-name)

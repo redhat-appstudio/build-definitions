@@ -1,4 +1,3 @@
----
 - op: replace
   path: /metadata/name
   value: fbc-builder
@@ -16,59 +15,59 @@
 - op: add
   path: /spec/tasks/3/params
   value:
-  - name: IMAGE
-    value: $(params.output-image)
-  - name: DOCKERFILE
-    value: $(params.dockerfile)
-  - name: CONTEXT
-    value: $(params.path-context)
-  - name: HERMETIC
-    value: "true"
-  - name: IMAGE_EXPIRES_AFTER
-    value: "$(params.image-expires-after)"
-  - name: COMMIT_SHA
-    value: "$(tasks.clone-repository.results.commit)"
+    - name: IMAGE
+      value: $(params.output-image)
+    - name: DOCKERFILE
+      value: $(params.dockerfile)
+    - name: CONTEXT
+      value: $(params.path-context)
+    - name: HERMETIC
+      value: "true"
+    - name: IMAGE_EXPIRES_AFTER
+      value: "$(params.image-expires-after)"
+    - name: COMMIT_SHA
+      value: "$(tasks.clone-repository.results.commit)"
 - op: add
   path: /spec/tasks/-
   value:
     name: inspect-image
     when:
-    - input: $(params.skip-checks)
-      operator: in
-      values: ["false"]
+      - input: $(params.skip-checks)
+        operator: in
+        values: ["false"]
     runAfter:
       - build-container
     taskRef:
       name: inspect-image
       version: "0.1"
     params:
-    - name: IMAGE_URL
-      value: $(tasks.build-container.results.IMAGE_URL)
-    - name: IMAGE_DIGEST
-      value: $(tasks.build-container.results.IMAGE_DIGEST)
+      - name: IMAGE_URL
+        value: $(tasks.build-container.results.IMAGE_URL)
+      - name: IMAGE_DIGEST
+        value: $(tasks.build-container.results.IMAGE_DIGEST)
     workspaces:
-    - name: source
-      workspace: workspace
+      - name: source
+        workspace: workspace
 - op: add
   path: /spec/tasks/-
   value:
     name: fbc-validate
     when:
-    - input: $(params.skip-checks)
-      operator: in
-      values: ["false"]
+      - input: $(params.skip-checks)
+        operator: in
+        values: ["false"]
     runAfter:
       - inspect-image
     taskRef:
       name: fbc-validation
       version: "0.1"
     params:
-    - name: IMAGE_URL
-      value: $(tasks.build-container.results.IMAGE_URL)
-    - name: IMAGE_DIGEST
-      value: $(tasks.build-container.results.IMAGE_DIGEST)
-    - name: BASE_IMAGE
-      value: $(tasks.inspect-image.results.BASE_IMAGE)
+      - name: IMAGE_URL
+        value: $(tasks.build-container.results.IMAGE_URL)
+      - name: IMAGE_DIGEST
+        value: $(tasks.build-container.results.IMAGE_DIGEST)
+      - name: BASE_IMAGE
+        value: $(tasks.inspect-image.results.BASE_IMAGE)
     workspaces:
       - name: workspace
         workspace: workspace
@@ -77,9 +76,9 @@
   value:
     name: fbc-related-image-check
     when:
-    - input: $(params.skip-checks)
-      operator: in
-      values: ["false"]
+      - input: $(params.skip-checks)
+        operator: in
+        values: ["false"]
     runAfter:
       - fbc-validate
     taskRef:
@@ -88,6 +87,7 @@
     workspaces:
       - name: workspace
         workspace: workspace
+
 # - op: remove
 #   # build-source-image as source images are not needed for FBC components
 #   path: /spec/tasks/4

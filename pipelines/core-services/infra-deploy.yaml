@@ -11,16 +11,16 @@
       name: update-infra-deployments
       version: "0.1"
     when:
-    - input: $(params.infra-deployment-update-script)
-      operator: notin
-      values: [""]
-    - input: $(tasks.status)
-      operator: notin
-      values: ["Failed"]
+      - input: $(params.infra-deployment-update-script)
+        operator: notin
+        values: [""]
+      - input: $(tasks.status)
+        operator: notin
+        values: ["Failed"]
     params:
-    - name: ORIGIN_REPO
-      value: $(params.git-url)
-    - name: REVISION
-      value: $(params.revision)
-    - name: SCRIPT
-      value: $(params.infra-deployment-update-script)
+      - name: ORIGIN_REPO
+        value: $(params.git-url)
+      - name: REVISION
+        value: $(params.revision)
+      - name: SCRIPT
+        value: $(params.infra-deployment-update-script)

@@ -85,4 +85,4 @@ spec:
         fi
         echo "${TEST_OUTPUT:-${ERROR_OUTPUT}}" | tee $(results.TEST_OUTPUT.path)
   workspaces:
-  - name: workspace
+    - name: workspace

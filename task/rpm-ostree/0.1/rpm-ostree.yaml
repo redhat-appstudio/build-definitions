@@ -12,243 +12,239 @@ metadata:
 spec:
   description: RPM Ostree
   params:
-  - description: Reference of the image rpm-ostree will produce.
-    name: IMAGE
-    type: string
-  - default: quay.io/redhat-user-workloads/project-sagano-tenant/ostree-builder/ostree-builder-fedora-38:d124414a81d17f31b1d734236f55272a241703d7
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    description: The location of the rpm-ostree builder image.
-    name: BUILDER_IMAGE
-    type: string
-  - default: .
-    description: Path to the directory to use as context.
-    name: CONTEXT
-    type: string
-  - description: The file to use to build the image
-    name: IMAGE_FILE
-    type: string
-  - default: "true"
-    description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS
-      registry)
-    name: TLSVERIFY
-    type: string
-  - default: ""
-    description: Delete image tag after specified time. Empty means to keep the image
-      tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks,
-      respectively.
-    name: IMAGE_EXPIRES_AFTER
-    type: string
-  - default: ""
-    description: The image is built from this commit.
-    name: COMMIT_SHA
-    type: string
-  - description: The platform to build on
-    name: PLATFORM
-    type: string
-  - description: The relative path of the file used to configure the rpm-ostree tool found in source control.
-      See https://github.com/coreos/rpm-ostree/blob/main/docs/container.md#adding-container-image-configuration
-    name: CONFIG_FILE
-    type: string
-    default: ""
+    - description: Reference of the image rpm-ostree will produce.
+      name: IMAGE
+      type: string
+    - default: quay.io/redhat-user-workloads/project-sagano-tenant/ostree-builder/ostree-builder-fedora-38:d124414a81d17f31b1d734236f55272a241703d7
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      description: The location of the rpm-ostree builder image.
+      name: BUILDER_IMAGE
+      type: string
+    - default: .
+      description: Path to the directory to use as context.
+      name: CONTEXT
+      type: string
+    - description: The file to use to build the image
+      name: IMAGE_FILE
+      type: string
+    - default: "true"
+      description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+      name: TLSVERIFY
+      type: string
+    - default: ""
+      description: Delete image tag after specified time. Empty means to keep the image tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
+      name: IMAGE_EXPIRES_AFTER
+      type: string
+    - default: ""
+      description: The image is built from this commit.
+      name: COMMIT_SHA
+      type: string
+    - description: The platform to build on
+      name: PLATFORM
+      type: string
+    - description: The relative path of the file used to configure the rpm-ostree tool found in source control. See https://github.com/coreos/rpm-ostree/blob/main/docs/container.md#adding-container-image-configuration
+      name: CONFIG_FILE
+      type: string
+      default: ""
   results:
-  - description: Digest of the image just built
-    name: IMAGE_DIGEST
-  - description: Image repository where the built image was pushed
-    name: IMAGE_URL
-  - description: Digests of the base images used for build
-    name: BASE_IMAGES_DIGESTS
+    - description: Digest of the image just built
+      name: IMAGE_DIGEST
+    - description: Image repository where the built image was pushed
+      name: IMAGE_URL
+    - description: Digests of the base images used for build
+      name: BASE_IMAGES_DIGESTS
   stepTemplate:
     env:
-    - name: CONTEXT
-      value: $(params.CONTEXT)
-    - name: IMAGE_FILE
-      value: $(params.IMAGE_FILE)
-    - name: IMAGE
-      value: $(params.IMAGE)
-    - name: TLSVERIFY
-      value: $(params.TLSVERIFY)
-    - name: IMAGE_EXPIRES_AFTER
-      value: $(params.IMAGE_EXPIRES_AFTER)
-    - name: BUILDER_IMAGE
-      value: $(params.BUILDER_IMAGE)
-    - name: CONFIG_FILE
-      value: $(params.CONFIG_FILE)
+      - name: CONTEXT
+        value: $(params.CONTEXT)
+      - name: IMAGE_FILE
+        value: $(params.IMAGE_FILE)
+      - name: IMAGE
+        value: $(params.IMAGE)
+      - name: TLSVERIFY
+        value: $(params.TLSVERIFY)
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.IMAGE_EXPIRES_AFTER)
+      - name: BUILDER_IMAGE
+        value: $(params.BUILDER_IMAGE)
+      - name: CONFIG_FILE
+        value: $(params.CONFIG_FILE)
     computeResources: {}
   steps:
-  - env:
-    - name: COMMIT_SHA
-      value: $(params.COMMIT_SHA)
-    image: quay.io/redhat-appstudio/multi-platform-runner:01c7670e81d5120347cf0ad13372742489985e5f@sha256:246adeaaba600e207131d63a7f706cffdcdc37d8f600c56187123ec62823ff44
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    name: build
-    computeResources:
-      limits:
-        memory: 512Mi
-      requests:
-        cpu: 250m
-        memory: 128Mi
-    script: |-
-      set -o verbose
-      set -eu
-      set -o pipefail
-      mkdir -p ~/.ssh
-      if [ -e "/ssh/error" ]; then
-        #no server could be provisioned
-        cat /ssh/error
-        exit 1
-      elif [ -e "/ssh/otp" ]; then
-       curl --cacert /ssh/otp-ca -XPOST -d @/ssh/otp $(cat /ssh/otp-server) >~/.ssh/id_rsa
-       echo "" >> ~/.ssh/id_rsa
-      else
-        cp /ssh/id_rsa ~/.ssh
-      fi
-      chmod 0400 ~/.ssh/id_rsa
-      export SSH_HOST=$(cat /ssh/host)
-      export BUILD_DIR=$(cat /ssh/user-dir)
-      export SSH_ARGS="-o StrictHostKeyChecking=no"
-      mkdir -p scripts
-      echo "$BUILD_DIR"
-      ssh $SSH_ARGS "$SSH_HOST"  mkdir -p "$BUILD_DIR/workspaces" "$BUILD_DIR/scripts" "$BUILD_DIR/tmp"
-
-      rsync -ra $(workspaces.source.path)/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
-      cat >scripts/script-build.sh <<'REMOTESSHEOF'
-      #!/bin/sh
-      set -o verbose
-      cd $(workspaces.source.path)
-      if [ -z "$CONFIG_FILE" ] ; then
-        CONFIG_FILE_ARG=""
-      else
-        CONFIG_FILE_ARG="  --image-config=source/$CONFIG_FILE "
-      fi
-      rpm-ostree compose image --initialize --format oci $CONFIG_FILE_ARG "source/$IMAGE_FILE" rhtap-final-image
-
-      REMOTESSHEOF
-      chmod +x scripts/script-build.sh
-      rsync -ra scripts "$SSH_HOST:$BUILD_DIR"
-      ssh $SSH_ARGS "$SSH_HOST" podman run --mount type=bind,source=$BUILD_DIR/tmp,target=/var/tmp,relabel=shared --privileged -e CONTEXT="$CONTEXT" -e IMAGE_FILE="$IMAGE_FILE" -e CONFIG_FILE="$CONFIG_FILE" -e IMAGE="$IMAGE" -e IMAGE_EXPIRES_AFTER="$IMAGE_EXPIRES_AFTER" -e COMMIT_SHA="$COMMIT_SHA"  --rm  -v "$BUILD_DIR/workspaces/source:$(workspaces.source.path):Z"  -v $BUILD_DIR/scripts:/script:Z --user=0  "$BUILDER_IMAGE" /script/script-build.sh
-      rsync -ra "$SSH_HOST:$BUILD_DIR/workspaces/source/" "$(workspaces.source.path)/"
-      cp -r rhtap-final-image /var/lib/containers/rhtap-final-image
-      buildah pull oci:rhtap-final-image
-      buildah images
-      buildah tag localhost/rhtap-final-image "$IMAGE"
-    securityContext:
-      capabilities:
-        add:
-        - SETFCAP
-    volumeMounts:
-    - mountPath: /var/lib/containers
-      name: varlibcontainers
-    - mountPath: /ssh
-      name: ssh
-      readOnly: true
-    workingDir: $(workspaces.source.path)
-  - image: quay.io/redhat-appstudio/syft:v0.98.0@sha256:4d3856e6a2622700b9a9d5d74d9aaf5d8a55671653f80bf6c636677658680ede
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    name: sbom-syft-generate
-    computeResources:
-      limits:
-        memory: 6Gi
-      requests:
-        memory: 6Gi
-    script: |
-      syft oci-dir:/var/lib/containers/rhtap-final-image --output cyclonedx-json=$(workspaces.source.path)/sbom-cyclonedx.json
-    volumeMounts:
-      - mountPath: /var/lib/containers
-        name: varlibcontainers
-  - image: registry.access.redhat.com/ubi9/python-39:1-158@sha256:967000729b17efdea309e297f4b1961c38b902a1ef18f6d886b8086c2a12f01f
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    name: create-purl-sbom
-    computeResources: {}
-    script: |
-      #!/bin/python3
-      import json
-
-      with open("./sbom-cyclonedx.json") as f:
-        cyclonedx_sbom = json.load(f)
-
-      purls = [{"purl": component["purl"]} for component in cyclonedx_sbom.get("components", []) if "purl" in component]
-      purl_content = {"image_contents": {"dependencies": purls}}
-
-      with open("sbom-purl.json", "w") as output_file:
-        json.dump(purl_content, output_file, indent=4)
-    securityContext:
-      runAsUser: 0
-    workingDir: $(workspaces.source.path)
-  - image: quay.io/redhat-appstudio/multi-platform-runner:01c7670e81d5120347cf0ad13372742489985e5f
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    name: inject-sbom-and-push
-    computeResources: {}
-    script: |
-      #!/bin/bash
-      # Expose base image digests
-      buildah images --format '{{ .Name }}:{{ .Tag }}@{{ .Digest }}' | grep -v $IMAGE > $(results.BASE_IMAGES_DIGESTS.path)
-
-      base_image_name=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.name"}}' $IMAGE | cut -f1 -d'@')
-      base_image_digest=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.digest"}}' $IMAGE)
-      container=$(buildah from --pull-never $IMAGE)
-      buildah config -a org.opencontainers.image.base.name=${base_image_name} -a org.opencontainers.image.base.digest=${base_image_digest} $container
-      buildah commit $container $IMAGE
-
-      status=-1
-      max_run=5
-      sleep_sec=10
-      for run in $(seq 1 $max_run); do
-        status=0
-        [ "$run" -gt 1 ] && sleep $sleep_sec
-        echo "Pushing sbom image to registry"
-        buildah push \
-          --tls-verify=$TLSVERIFY \
-          --digestfile $(workspaces.source.path)/image-digest $IMAGE \
-          docker://$IMAGE && break || status=$?
-      done
-      if [ "$status" -ne 0 ]; then
-          echo "Failed to push sbom image to registry after ${max_run} tries"
+    - env:
+        - name: COMMIT_SHA
+          value: $(params.COMMIT_SHA)
+      image: quay.io/redhat-appstudio/multi-platform-runner:01c7670e81d5120347cf0ad13372742489985e5f@sha256:246adeaaba600e207131d63a7f706cffdcdc37d8f600c56187123ec62823ff44
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      name: build
+      computeResources:
+        limits:
+          memory: 512Mi
+        requests:
+          cpu: 250m
+          memory: 128Mi
+      script: |-
+        set -o verbose
+        set -eu
+        set -o pipefail
+        mkdir -p ~/.ssh
+        if [ -e "/ssh/error" ]; then
+          #no server could be provisioned
+          cat /ssh/error
           exit 1
-      fi
+        elif [ -e "/ssh/otp" ]; then
+         curl --cacert /ssh/otp-ca -XPOST -d @/ssh/otp $(cat /ssh/otp-server) >~/.ssh/id_rsa
+         echo "" >> ~/.ssh/id_rsa
+        else
+          cp /ssh/id_rsa ~/.ssh
+        fi
+        chmod 0400 ~/.ssh/id_rsa
+        export SSH_HOST=$(cat /ssh/host)
+        export BUILD_DIR=$(cat /ssh/user-dir)
+        export SSH_ARGS="-o StrictHostKeyChecking=no"
+        mkdir -p scripts
+        echo "$BUILD_DIR"
+        ssh $SSH_ARGS "$SSH_HOST"  mkdir -p "$BUILD_DIR/workspaces" "$BUILD_DIR/scripts" "$BUILD_DIR/tmp"
 
-      cat "$(workspaces.source.path)"/image-digest | tee $(results.IMAGE_DIGEST.path)
-      echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
-    securityContext:
-      capabilities:
-        add:
-        - SETFCAP
-      runAsUser: 0
-    volumeMounts:
-    - mountPath: /var/lib/containers
-      name: varlibcontainers
-    workingDir: $(workspaces.source.path)
-  - args:
-    - attach
-    - sbom
-    - --sbom
-    - sbom-cyclonedx.json
-    - --type
-    - cyclonedx
-    - $(params.IMAGE)
-    image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
-    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
-    # the cluster will set imagePullPolicy to IfNotPresent
-    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
-    name: upload-sbom
-    computeResources: {}
-    workingDir: $(workspaces.source.path)
+        rsync -ra $(workspaces.source.path)/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
+        cat >scripts/script-build.sh <<'REMOTESSHEOF'
+        #!/bin/sh
+        set -o verbose
+        cd $(workspaces.source.path)
+        if [ -z "$CONFIG_FILE" ] ; then
+          CONFIG_FILE_ARG=""
+        else
+          CONFIG_FILE_ARG="  --image-config=source/$CONFIG_FILE "
+        fi
+        rpm-ostree compose image --initialize --format oci $CONFIG_FILE_ARG "source/$IMAGE_FILE" rhtap-final-image
+
+        REMOTESSHEOF
+        chmod +x scripts/script-build.sh
+        rsync -ra scripts "$SSH_HOST:$BUILD_DIR"
+        ssh $SSH_ARGS "$SSH_HOST" podman run --mount type=bind,source=$BUILD_DIR/tmp,target=/var/tmp,relabel=shared --privileged -e CONTEXT="$CONTEXT" -e IMAGE_FILE="$IMAGE_FILE" -e CONFIG_FILE="$CONFIG_FILE" -e IMAGE="$IMAGE" -e IMAGE_EXPIRES_AFTER="$IMAGE_EXPIRES_AFTER" -e COMMIT_SHA="$COMMIT_SHA"  --rm  -v "$BUILD_DIR/workspaces/source:$(workspaces.source.path):Z"  -v $BUILD_DIR/scripts:/script:Z --user=0  "$BUILDER_IMAGE" /script/script-build.sh
+        rsync -ra "$SSH_HOST:$BUILD_DIR/workspaces/source/" "$(workspaces.source.path)/"
+        cp -r rhtap-final-image /var/lib/containers/rhtap-final-image
+        buildah pull oci:rhtap-final-image
+        buildah images
+        buildah tag localhost/rhtap-final-image "$IMAGE"
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+        - mountPath: /ssh
+          name: ssh
+          readOnly: true
+      workingDir: $(workspaces.source.path)
+    - image: quay.io/redhat-appstudio/syft:v0.98.0@sha256:4d3856e6a2622700b9a9d5d74d9aaf5d8a55671653f80bf6c636677658680ede
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      name: sbom-syft-generate
+      computeResources:
+        limits:
+          memory: 6Gi
+        requests:
+          memory: 6Gi
+      script: |
+        syft oci-dir:/var/lib/containers/rhtap-final-image --output cyclonedx-json=$(workspaces.source.path)/sbom-cyclonedx.json
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+    - image: registry.access.redhat.com/ubi9/python-39:1-158@sha256:967000729b17efdea309e297f4b1961c38b902a1ef18f6d886b8086c2a12f01f
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      name: create-purl-sbom
+      computeResources: {}
+      script: |
+        #!/bin/python3
+        import json
+
+        with open("./sbom-cyclonedx.json") as f:
+          cyclonedx_sbom = json.load(f)
+
+        purls = [{"purl": component["purl"]} for component in cyclonedx_sbom.get("components", []) if "purl" in component]
+        purl_content = {"image_contents": {"dependencies": purls}}
+
+        with open("sbom-purl.json", "w") as output_file:
+          json.dump(purl_content, output_file, indent=4)
+      securityContext:
+        runAsUser: 0
+      workingDir: $(workspaces.source.path)
+    - image: quay.io/redhat-appstudio/multi-platform-runner:01c7670e81d5120347cf0ad13372742489985e5f
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      name: inject-sbom-and-push
+      computeResources: {}
+      script: |
+        #!/bin/bash
+        # Expose base image digests
+        buildah images --format '{{ .Name }}:{{ .Tag }}@{{ .Digest }}' | grep -v $IMAGE > $(results.BASE_IMAGES_DIGESTS.path)
+
+        base_image_name=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.name"}}' $IMAGE | cut -f1 -d'@')
+        base_image_digest=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.digest"}}' $IMAGE)
+        container=$(buildah from --pull-never $IMAGE)
+        buildah config -a org.opencontainers.image.base.name=${base_image_name} -a org.opencontainers.image.base.digest=${base_image_digest} $container
+        buildah commit $container $IMAGE
+
+        status=-1
+        max_run=5
+        sleep_sec=10
+        for run in $(seq 1 $max_run); do
+          status=0
+          [ "$run" -gt 1 ] && sleep $sleep_sec
+          echo "Pushing sbom image to registry"
+          buildah push \
+            --tls-verify=$TLSVERIFY \
+            --digestfile $(workspaces.source.path)/image-digest $IMAGE \
+            docker://$IMAGE && break || status=$?
+        done
+        if [ "$status" -ne 0 ]; then
+            echo "Failed to push sbom image to registry after ${max_run} tries"
+            exit 1
+        fi
+
+        cat "$(workspaces.source.path)"/image-digest | tee $(results.IMAGE_DIGEST.path)
+        echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
+        runAsUser: 0
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+      workingDir: $(workspaces.source.path)
+    - args:
+        - attach
+        - sbom
+        - --sbom
+        - sbom-cyclonedx.json
+        - --type
+        - cyclonedx
+        - $(params.IMAGE)
+      image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      name: upload-sbom
+      computeResources: {}
+      workingDir: $(workspaces.source.path)
   volumes:
-  - emptyDir: {}
-    name: varlibcontainers
-  - name: ssh
-    secret:
-      optional: false
-      secretName: multi-platform-ssh-$(context.taskRun.name)
+    - emptyDir: {}
+      name: varlibcontainers
+    - name: ssh
+      secret:
+        optional: false
+        secretName: multi-platform-ssh-$(context.taskRun.name)
   workspaces:
-  - description: Workspace containing the source code to build.
-    name: source
+    - description: Workspace containing the source code to build.
+      name: source

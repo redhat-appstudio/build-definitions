@@ -1,19 +1,17 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- ../docker-build
-
+  - ../docker-build
 commonAnnotations:
   # Make it easier to create bundle for these pipelines
   appstudio.openshift.io/core-services-ci: "1"
-
 patches:
-- path: infra-deploy.yaml
-  target:
-    kind: Pipeline
-- path: update-repo.yaml
-  target:
-    kind: Pipeline
-- path: slack-notification.yaml
-  target:
-    kind: Pipeline
+  - path: infra-deploy.yaml
+    target:
+      kind: Pipeline
+  - path: update-repo.yaml
+    target:
+      kind: Pipeline
+  - path: slack-notification.yaml
+    target:
+      kind: Pipeline

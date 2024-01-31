@@ -4,32 +4,31 @@ metadata:
   name: example-hello-world
 spec:
   description: >-
-    This is example task which prints content in message parameter and if secret hello-world with key "show-me"
-    exists then the SHA256 of the key value is printed.
+    This is example task which prints content in message parameter and if secret hello-world with key "show-me" exists then the SHA256 of the key value is printed.
 
     Secret creation example: 'oc create secret generic hello-world --from-literal=show-me=super-secret'
   params:
-  - name: message
-    type: string
-    description: Message to be printed.
-    default: Hello World!!!
+    - name: message
+      type: string
+      description: Message to be printed.
+      default: Hello World!!!
   volumes:
-  - name: secret
-    secret:
-      secretName: hello-world
-      optional: true
+    - name: secret
+      secret:
+        secretName: hello-world
+        optional: true
   steps:
-  - name: main-step
-    image: registry.access.redhat.com/ubi9/ubi-minimal:9.1.0-1829@sha256:95413c8dacaac773421428947a431c1cb099d19b4b1125df77d5d1cd2f463ab8
-    script: |
-      #!/bin/sh
-      echo $MESSAGE
-      if [ -f /etc/secret/show-me ]; then
-        sha256sum /etc/secret/show-me
-      fi
-    env:
-    - name: MESSAGE
-      value: "$(params.message)"
-    volumeMounts:
-      - name: secret
-        mountPath: /etc/secret
+    - name: main-step
+      image: registry.access.redhat.com/ubi9/ubi-minimal:9.1.0-1829@sha256:95413c8dacaac773421428947a431c1cb099d19b4b1125df77d5d1cd2f463ab8
+      script: |
+        #!/bin/sh
+        echo $MESSAGE
+        if [ -f /etc/secret/show-me ]; then
+          sha256sum /etc/secret/show-me
+        fi
+      env:
+        - name: MESSAGE
+          value: "$(params.message)"
+      volumeMounts:
+        - name: secret
+          mountPath: /etc/secret

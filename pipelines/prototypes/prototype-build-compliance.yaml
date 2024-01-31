@@ -388,27 +388,27 @@ spec:
         name: summary
         version: "0.1"
       params:
-      - name: pipeline-run-name
-        value: "$(context.pipelineRun.name)"
-      - name: git-url
-        value: "$(params.git-url)"
-      - name: image-url
-        value: $(params.output-image)
+        - name: pipeline-run-name
+          value: "$(context.pipelineRun.name)"
+        - name: git-url
+          value: "$(params.git-url)"
+        - name: image-url
+          value: $(params.output-image)
     - name: message-slack-summary
       when:
-      - input: $(params.slack-webhook)
-        operator: notin
-        values: [""]
+        - input: $(params.slack-webhook)
+          operator: notin
+          values: [""]
       runAfter:
         - record-results-show-summary
       taskRef:
         name: utils-task
         version: "0.1"
       params:
-      - name: SCRIPT
-        value: |
-          #!/usr/bin/env bash
-          echo "This is a placeholder for message-slack-summary"
+        - name: SCRIPT
+          value: |
+            #!/usr/bin/env bash
+            echo "This is a placeholder for message-slack-summary"
   workspaces:
     - name: workspace
     - name: git-auth

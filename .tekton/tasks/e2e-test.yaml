@@ -21,25 +21,22 @@ spec:
       image: quay.io/redhat-appstudio/e2e-tests:327e55dbfa361d32689037180b5e44e963079c9e
       # a la infra-deployment updates, when PRs merge in e2e-tests, PRs will be opened
       # against build-definitions to update this tag
-      args: [
-        "--ginkgo.label-filter=build-templates-e2e",
-        "--ginkgo.no-color"
-      ]
+      args: ["--ginkgo.label-filter=build-templates-e2e", "--ginkgo.no-color"]
       securityContext:
         runAsUser: 1000
       env:
-      - name: APP_SUFFIX
-        value: "$(params.app_suffix)"
-      - name: COMPONENT_REPO_URLS
-        value: "https://github.com/redhat-appstudio-qe/devfile-sample-python-basic,https://github.com/redhat-appstudio-qe/retrodep,https://github.com/cachito-testing/pip-e2e-test,https://github.com/redhat-appstudio-qe/fbc-sample-repo,https://github.com/redhat-appstudio-qe/nodejs-no-dockerfile,https://github.com/redhat-appstudio-qe/maven-hello-world"
-      - name: QUAY_E2E_ORGANIZATION
-        value: redhat-appstudio
-      - name: E2E_APPLICATIONS_NAMESPACE
-        value: "$(params.e2e_test_namespace)"
-      - name: GITHUB_TOKEN
-        valueFrom:
-          secretKeyRef:
-            name: github
-            key: token
-      - name: MY_GITHUB_ORG
-        value: redhat-appstudio-appdata
+        - name: APP_SUFFIX
+          value: "$(params.app_suffix)"
+        - name: COMPONENT_REPO_URLS
+          value: "https://github.com/redhat-appstudio-qe/devfile-sample-python-basic,https://github.com/redhat-appstudio-qe/retrodep,https://github.com/cachito-testing/pip-e2e-test,https://github.com/redhat-appstudio-qe/fbc-sample-repo,https://github.com/redhat-appstudio-qe/nodejs-no-dockerfile,https://github.com/redhat-appstudio-qe/maven-hello-world"
+        - name: QUAY_E2E_ORGANIZATION
+          value: redhat-appstudio
+        - name: E2E_APPLICATIONS_NAMESPACE
+          value: "$(params.e2e_test_namespace)"
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github
+              key: token
+        - name: MY_GITHUB_ORG
+          value: redhat-appstudio-appdata
