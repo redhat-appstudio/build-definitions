@@ -7,3 +7,9 @@
 - op: replace
   path: /spec/steps/0/computeResources/requests/memory
   value: 20Gi
+- op: replace
+  path: /spec/steps/0/computeResources/limits/cpu
+  value: 6
+- op: replace
+  path: /spec/steps/0/computeResources/requests/cpu
+  value: 6
