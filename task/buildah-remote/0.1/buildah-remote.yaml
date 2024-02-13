@@ -19,6 +19,12 @@ spec:
   - description: Reference of the image buildah will produce.
     name: IMAGE
     type: string
+  - default: ""
+    description: Disable the generation of an OCI Image Index. Empty means that params.IMAGE
+      will be an Image Index. Any content will result in params.IMAGE being an OCI
+      Image Manifest.
+    name: DISABLE_IMAGE_INDEX
+    type: string
   - default: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
     description: The location of the buildah builder image.
     name: BUILDER_IMAGE
@@ -107,6 +113,8 @@ spec:
       value: $(params.DOCKERFILE)
     - name: IMAGE
       value: $(params.IMAGE)
+    - name: DISABLE_IMAGE_INDEX
+      value: $(params.DISABLE_IMAGE_INDEX)
     - name: TLSVERIFY
       value: $(params.TLSVERIFY)
     - name: IMAGE_EXPIRES_AFTER
@@ -282,6 +290,7 @@ spec:
        -e CONTEXT="$CONTEXT" \
        -e DOCKERFILE="$DOCKERFILE" \
        -e IMAGE="$IMAGE" \
+       -e DISABLE_IMAGE_INDEX="$DISABLE_IMAGE_INDEX" \
        -e TLSVERIFY="$TLSVERIFY" \
        -e IMAGE_EXPIRES_AFTER="$IMAGE_EXPIRES_AFTER" \
        -e YUM_REPOS_D_SRC="$YUM_REPOS_D_SRC" \
@@ -416,6 +425,15 @@ spec:
       buildah config -a org.opencontainers.image.base.name=${base_image_name} -a org.opencontainers.image.base.digest=${base_image_digest} $container
       buildah commit $container $IMAGE
 
+      IMAGE_INDEX="$IMAGE-index"
+      if [ -n "${DISABLE_IMAGE_INDEX}" ]; then
+        echo "Adding $IMAGE to an OCI Image Index"
+        buildah manifest create "$IMAGE_INDEX"
+        buildah manifest add $IMAGE_INDEX "docker://$IMAGE"
+      else
+        echo "Skipping production of OCI Image Index"
+      fi
+
       status=-1
       max_run=5
       sleep_sec=10
@@ -425,7 +443,7 @@ spec:
         echo "Pushing sbom image to registry"
         buildah push \
           --tls-verify=$TLSVERIFY \
-          --digestfile $(workspaces.source.path)/image-digest $IMAGE \
+          --digestfile $(workspaces.source.path)/image-digest $IMAGE_INDEX \
           docker://$IMAGE && break || status=$?
       done
       if [ "$status" -ne 0 ]; then
