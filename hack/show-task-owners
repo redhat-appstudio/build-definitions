@@ -1,0 +1,76 @@
+#!/bin/bash  
+# A Script to create a table of images and their user across tasks
+# and the task and owners from the OWNERS file
+# Updates a file called owners.md with a markdown table. 
+ 
+SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )" 
+TASKSDIR=${SCRIPTDIR}/../task
+IMAGES_TO_TASKS=$(mktemp -d)   
+TASKS_TO_OWNERS=$(mktemp)
+# These are the name of params which may have default images
+# so the script checks them for default values
+PARAM_WITHIMAGES="BUILDER_IMAGE GIT_IMAGE SCRIPT_IMAGE IMAGE"
+function showTask() { 
+    TASK_NAME=$(yq .metadata.name $1)
+    echo "Processing $TASK_NAME"
+    TASK_OWNER=$2
+    IMAGE_REFS=$(mktemp)
+    yq .spec.steps[].image $1 | grep -v "\$(" | cut -d '@' -f 1  > $IMAGE_REFS
+    for tag in $PARAM_WITHIMAGES; do  
+        IMAGE=$(yq '.spec.params.[] | select(.name == "'$tag'").default' $1)  
+        if [ "$IMAGE" != "" ] && [ "$IMAGE" != "null" ]; then
+            NO_SHA=$(echo $IMAGE | cut -d '@' -f 1 ) 
+            echo "$NO_SHA"  >> $IMAGE_REFS
+        fi 
+    done
+    while read p; do  
+      file=$(echo $p | sed "s!/!__!g")
+      touch $IMAGES_TO_TASKS/$file
+      echo $TASK_NAME >>$IMAGES_TO_TASKS/$file   
+    done < $IMAGE_REFS    
+    printf "| $TASK_NAME | $TASK_OWNER | \n"   >>$TASKS_TO_OWNERS
+} 
+ 
+# Compute the list of images and which tasks they are in 
+for task in $(ls $TASKSDIR); do
+  VERSIONDIR=$(ls -d $TASKSDIR/$task/*/ | sort -t. -k 1,1n -k 2,2n -k 3,3n -k 4,4n | tail -n1)
+  DIR=$(dirname $VERSIONDIR)
+  OWNER="No-Owners-File" 
+  if [ -f $DIR/OWNERS ]; then
+    OWNER=$(cat $DIR/OWNERS) 
+  fi 
+  if [ -f $VERSIONDIR/$task.yaml ]; then
+    showTask $VERSIONDIR/$task.yaml  "$OWNER"
+  elif [ -f $VERSIONDIR/kustomization.yaml ]; then
+    T=$(mktemp)
+    kustomize build $VERSIONDIR > $T 
+    showTask $T "$OWNER" 
+  else
+    echo Unable to apply task in $VERSIONDIR
+  fi
+done  
+
+OUTPUT_SHARED_IMAGE=$(mktemp)
+# Compute the list of images and which tasks use them
+echo "## Images shared across Tasks"  >$OUTPUT_SHARED_IMAGE
+printf "|  Num   |  Image   | Task(s)  | Count   | \n" >>$OUTPUT_SHARED_IMAGE
+printf "| -------- | -------- | -------  | ------- | \n" >>$OUTPUT_SHARED_IMAGE 
+count=0
+for sorted_filename in `ls $IMAGES_TO_TASKS | sort -g` ; do 
+  let count++ 
+  imagename=$(echo $sorted_filename | sed "s!__!/!g") 
+  tasks=$(cat $IMAGES_TO_TASKS/$sorted_filename | uniq | sort) 
+  number=$(cat $IMAGES_TO_TASKS/$sorted_filename | uniq | wc -l)
+  tasks=${tasks//$'\n'/, }  
+  FORMAT="| "$count" | "$imagename" | "$tasks" | "$number" | \n" 
+  printf "$FORMAT"  >>$OUTPUT_SHARED_IMAGE
+done 
+
+OUTPUT=owners.md 
+echo "# Build Definitions " >$OUTPUT
+cat $OUTPUT_SHARED_IMAGE >>$OUTPUT
+#output by image sorted so header here 
+echo "## Tasks and Owners " >>$OUTPUT
+printf "| Num |  Task  | Owner  |\n" >>$OUTPUT
+printf "|  ------- |  ------- | ------- |\n" >>$OUTPUT
+cat $TASKS_TO_OWNERS | sort | nl | sed 's/^/|/' >>$OUTPUT
