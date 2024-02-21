@@ -249,7 +249,7 @@ spec:
     - mountPath: /var/lib/containers
       name: varlibcontainers
   - name: analyse-dependencies-java-sbom
-    image: quay.io/redhat-appstudio/hacbs-jvm-build-request-processor:127ee0c223a2b56a9bd20a6f2eaeed3bd6015f77
+    image: quay.io/redhat-appstudio/hacbs-jvm-build-request-processor@sha256:a5e3ea842f459a57648e465c6f976c88054431aa460b025af4cc37dc635a6321
     # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
     # the cluster will set imagePullPolicy to IfNotPresent
     # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.

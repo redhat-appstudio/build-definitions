@@ -164,7 +164,7 @@ spec:
     - mountPath: /var/lib/containers
       name: varlibcontainers
   - name: analyse-dependencies-java-sbom
-    image: quay.io/redhat-appstudio/hacbs-jvm-build-request-processor:127ee0c223a2b56a9bd20a6f2eaeed3bd6015f77
+    image: quay.io/redhat-appstudio/hacbs-jvm-build-request-processor@sha256:a5e3ea842f459a57648e465c6f976c88054431aa460b025af4cc37dc635a6321
     script: |
       if [ -f /var/lib/containers/java ]; then
         /opt/jboss/container/java/run/run-java.sh analyse-dependencies path $(cat /workspace/container_path) -s $(workspaces.source.path)/sbom-image.json --task-run-name $(context.taskRun.name) --publishers $(results.SBOM_JAVA_COMPONENTS_COUNT.path)

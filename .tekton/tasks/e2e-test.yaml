@@ -18,7 +18,7 @@ spec:
       type: string
   steps:
     - name: e2e-test
-      image: quay.io/redhat-appstudio/e2e-tests:42f4d88c5decbb098dbea2937aef111f48585252
+      image: quay.io/redhat-appstudio/e2e-tests@sha256:90d6e83c272d1a75827f9789e1670c2de635a2f3850386c35f8fae28db1f5ccc
       # a la infra-deployment updates, when PRs merge in e2e-tests, PRs will be opened
       # against build-definitions to update this tag
       args: [

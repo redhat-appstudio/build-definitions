@@ -13,7 +13,7 @@ spec:
     This task can be used to run enterprise contract checks
   steps:
   - name: gather-tasks
-    image: quay.io/redhat-appstudio/appstudio-utils:512cca38316355d6dbfc9c23ed3c5afabb943d24
+    image: quay.io/redhat-appstudio/appstudio-utils@sha256:0d969c2d75b3f476cb6d1c7f58146cdbec42c08ec43889f70f26ce1fd624de10
     # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
     # the cluster will set imagePullPolicy to IfNotPresent
     # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
