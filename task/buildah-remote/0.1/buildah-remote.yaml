@@ -294,6 +294,9 @@ spec:
         fi
       done
 
+      # Needed to generate base images SBOM
+      echo "$BASE_IMAGES" > /workspace/base_images_from_dockerfile
+
       buildah push "$IMAGE" oci:rhtap-final-image
       REMOTESSHEOF
       chmod +x scripts/script-build.sh
@@ -431,6 +434,17 @@ spec:
 
       with open("sbom-purl.json", "w") as output_file:
         json.dump(purl_content, output_file, indent=4)
+    securityContext:
+      runAsUser: 0
+    workingDir: $(workspaces.source.path)
+  - computeResources: {}
+    env:
+    - name: BASE_IMAGES_DIGESTS_PATH
+      value: $(results.BASE_IMAGES_DIGESTS.path)
+    image: quay.io/redhat-appstudio/base-images-sbom-script@sha256:667669e3def018f9dbb8eaf8868887a40bc07842221e9a98f6787edcff021840
+    name: create-base-images-sbom
+    script: |
+      python3 /app/base_images_sbom_script.py --sbom=sbom-cyclonedx.json --base-images-from-dockerfile=/workspace/base_images_from_dockerfile --base-images-digests=$BASE_IMAGES_DIGESTS_PATH
     securityContext:
       runAsUser: 0
     workingDir: $(workspaces.source.path)
