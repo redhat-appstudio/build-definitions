@@ -24,7 +24,38 @@ spec:
       description: Tekton task test output.
     - name: CLAIR_SCAN_RESULT
       description: Clair scan result.
+    - name: IMAGES_PROCESSED
+      description: Images processed in the task.
   steps:
+    - name: get-image-manifests
+      image: quay.io/redhat-appstudio/hacbs-test:v1.3.4@sha256:b909fe6111e04169742e23a5e515aa549aa8c09ce0348f4560ae83d3c174a15a
+      # the clair-in-ci image neither has skopeo or jq installed. Hence, we create an extra step to get the image manifest digests
+      env:
+        - name: IMAGE_URL
+          value: $(params.image-url)
+        - name: IMAGE_DIGEST
+          value: $(params.image-digest)
+      securityContext:
+        capabilities:
+          add:
+            - SETFCAP
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        . /utils.sh
+
+        imagewithouttag=$(echo -n $IMAGE_URL | sed "s/\(.*\):.*/\1/")
+        # strip new-line escape symbol from parameter and save it to variable
+        imageanddigest=$(echo $imagewithouttag@$IMAGE_DIGEST)
+        echo "Inspecting raw image manifest $imageanddigest."
+
+        # Get the arch and image manifests by inspecting the image. This is mainly for identifying image indexes
+        image_manifests=$(get_image_manifests -i ${imageanddigest})
+        if [ -n "$image_manifests" ]; then
+          echo "$image_manifests" | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read -r arch arch_sha; do
+            echo "$arch_sha" > /tekton/home/image-manifest-$arch.sha
+          done
+        fi
     - name: get-vulnerabilities
       image: quay.io/redhat-appstudio/clair-in-ci:v1  # explicit floating tag, daily updates, per arch call this is exempt for now for use of image digest
       imagePullPolicy: Always
@@ -36,13 +67,31 @@ spec:
       script: |
         #!/usr/bin/env bash
 
-        imagewithouttag=$(echo $IMAGE_URL | sed "s/\(.*\):.*/\1/" | tr -d '\n')
-        # strip new-line escape symbol from parameter and save it to variable
-        imageanddigest=$(echo $imagewithouttag@$IMAGE_DIGEST)
+        imagewithouttag=$(echo -n $IMAGE_URL | sed "s/\(.*\):.*/\1/")
+        images_processed_template='{"image": {"pullspec": "'"$IMAGE_URL"'", "digests": [%s]}}'
+        digests_processed=()
 
-        clair-action report --image-ref=$imageanddigest --db-path=/tmp/matcher.db --format=quay | tee /tekton/home/clair-result.json || true
+        for sha_file in /tekton/home/image-manifest-*.sha; do
+          if [ -e "$sha_file" ]; then
+            arch_sha=$(cat "$sha_file")
+            arch=$(basename "$sha_file" | sed 's/image-manifest-//;s/.sha//')
+            arch_specific_digest="$imagewithouttag@$arch_sha"
+
+            echo "Running clair-action on $arch image manifest."
+            # run the scan for each image manifest in the image index
+            clair-action report --image-ref=$arch_specific_digest --db-path=/tmp/matcher.db --format=quay | tee /tekton/home/clair-result-$arch.json || true
+
+            digests_processed+=("\"$arch_sha\"")
+          fi
+        done
+
+        digests_processed_string=$(IFS=,; echo "${digests_processed[*]}")
+
+        # add the image_index to the processed digests list and store the result in a file
+        images_processed=$(echo "${images_processed_template/\[%s]/[$digests_processed_string]}")
+        echo "$images_processed" > /tekton/home/images-processed.json
     - name: conftest-vulnerabilities
-      image: quay.io/redhat-appstudio/hacbs-test:v1.3.0@sha256:cd4601a7d71ebd908046db7a9b7010611b8b372fe941664d5163c81250a1a1fc
+      image: quay.io/redhat-appstudio/hacbs-test:v1.3.4@sha256:b909fe6111e04169742e23a5e515aa549aa8c09ce0348f4560ae83d3c174a15a
       # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
       # the cluster will set imagePullPolicy to IfNotPresent
       # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
@@ -56,30 +105,58 @@ spec:
         . /utils.sh
         trap 'handle_error $(results.TEST_OUTPUT.path)' EXIT
 
-        if [ ! -s /tekton/home/clair-result.json ]; then
-          echo "Previous step [get-vulnerabilities] failed: /tekton/home/clair-result.json is empty."
-        else
-          /usr/bin/conftest test --no-fail /tekton/home/clair-result.json \
-          --policy /project/clair/vulnerabilities-check.rego --namespace required_checks \
-          --output=json | tee /tekton/home/clair-vulnerabilities.json || true
+        clair_result_files=$(ls /tekton/home/clair-result-*.json)
+        if [ -z "$clair_result_files" ]; then
+          echo "Previous step [get-vulnerabilities] failed: No clair-result files found in /tekton/home."
         fi
 
-        if [[ ! -f /tekton/home/clair-vulnerabilities.json ]]; then
-          note="Task $(context.task.name) failed: /tekton/home/clair-vulnerabilities.json did not generate. For details, check Tekton task log."
+        missing_vulnerabilities_files=""
+        for file in $clair_result_files; do
+          file_suffix=$(basename "$file" | sed 's/clair-result-//;s/.json//')
+          if [ ! -s "$file" ]; then
+            echo "Previous step [get-vulnerabilities] failed: $file is empty."
+          else
+            /usr/bin/conftest test --no-fail $file \
+            --policy /project/clair/vulnerabilities-check.rego --namespace required_checks \
+            --output=json | tee /tekton/home/clair-vulnerabilities-$file_suffix.json || true
+          fi
+
+          #check for missing "clair-vulnerabilities-<arch>/image-index" file and create a string
+          if [ ! -f "/tekton/home/clair-vulnerabilities-$file_suffix.json" ]; then
+            missing_vulnerabilities_files+="${missing_vulnerabilities_files:+, }/tekton/home/clair-vulnerabilities-$file_suffix.json"
+          fi
+        done
+
+        if [ -n "$missing_vulnerabilities_files" ]; then
+          note="Task $(context.task.name) failed: $missing_vulnerabilities_files did not generate. For details, check Tekton task log."
           TEST_OUTPUT=$(make_result_json -r "ERROR" -t "$note")
-          echo "/tekton/home/clair-vulnerabilities.json did not generate correctly. For details, check conftest command in Tekton task log."
+          echo "$missing_vulnerabilities_files did not generate correctly. For details, check conftest command in Tekton task log."
           echo "${TEST_OUTPUT}" | tee $(results.TEST_OUTPUT.path)
           exit 0
         fi
 
-        jq -rce \
-          '{vulnerabilities:{
-              critical: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_critical_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0),
-              high: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_high_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0),
-              medium: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_medium_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0),
-              low: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_low_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0),
-              unknown: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_unknown_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0)
-            }}' /tekton/home/clair-vulnerabilities.json | tee $(results.CLAIR_SCAN_RESULT.path)
+        scan_result='{"vulnerabilities":{"critical":0, "high":0, "medium":0, "low":0, "unknown":0}}'
+        for file in /tekton/home/clair-vulnerabilities-*.json; do
+            result=$(jq -rce \
+                '{vulnerabilities:{
+                    critical: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_critical_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0),
+                    high: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_high_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0),
+                    medium: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_medium_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0),
+                    low: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_low_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0),
+                    unknown: (.[] | .warnings? // [] | map(select(.metadata.details.name=="clair_unknown_vulnerabilities").metadata."vulnerabilities_number" // 0)| add // 0)
+                  }}' "$file")
+
+            scan_result=$(jq -s -rce '.[0].vulnerabilities.critical += .[1].vulnerabilities.critical |
+                                .[0].vulnerabilities.high += .[1].vulnerabilities.high |
+                                .[0].vulnerabilities.medium += .[1].vulnerabilities.medium |
+                                .[0].vulnerabilities.low += .[1].vulnerabilities.low |
+                                .[0].vulnerabilities.unknown += .[1].vulnerabilities.unknown |
+                                .[0]' <<<"$scan_result $result")
+        done
+
+        echo "$scan_result" | tee $(results.CLAIR_SCAN_RESULT.path)
+
+        cat /tekton/home/images-processed.json | tee $(results.IMAGES_PROCESSED.path)
 
         note="Task $(context.task.name) completed: Refer to Tekton task result CLAIR_SCAN_RESULT for vulnerabilities scanned by Clair."
         TEST_OUTPUT=$(make_result_json -r "SUCCESS" -t "$note")
