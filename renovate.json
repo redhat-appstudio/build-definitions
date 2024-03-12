@@ -16,10 +16,10 @@
         "quay.io/redhat-appstudio/appstudio-utils",
         "quay.io/redhat-appstudio/e2e-tests",
         "quay.io/redhat-appstudio/buildah",
-        "quay.io/redhat-appstudio/syft",
         "quay.io/redhat-appstudio/hacbs-jvm-build-request-processor",
         "quay.io/redhat-appstudio/cosign",
-        "quay.io/redhat-appstudio/cachi2"
+        "quay.io/redhat-appstudio/cachi2",
+        "registry.redhat.io/rh-syft-tech-preview/syft-rhel9"
       ],
       "groupName": "build",
       "reviewers": ["mmorhun", "tkdchen", "psturc", "brunoapimentel"]
