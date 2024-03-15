@@ -10,6 +10,8 @@ metadata:
     pipelinesascode.tekton.dev/task-2: "yaml-lint"
     pipelinesascode.tekton.dev/max-keep-runs: "5"
 spec:
+  timeouts:
+    pipeline: 2h
   params:
     - name: repo_url
       value: "{{ repo_url }}"
@@ -173,6 +175,7 @@ spec:
           workspaces:
             - name: source
       - name: e2e-tests
+        timeout: 2h
         params:
           - name: e2e_test_namespace
             value: $(params.e2e_test_namespace)
