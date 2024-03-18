@@ -16,9 +16,11 @@ spec:
   results:
     - description: Tekton task test output.
       name: TEST_OUTPUT
+    - description: Images processed in the task.
+      name: IMAGES_PROCESSED
   steps:
   - name: sbom-json-check
-    image: quay.io/redhat-appstudio/hacbs-test:v1.3.0@sha256:cd4601a7d71ebd908046db7a9b7010611b8b372fe941664d5163c81250a1a1fc
+    image: quay.io/redhat-appstudio/hacbs-test:v1.3.4@sha256:b909fe6111e04169742e23a5e515aa549aa8c09ce0348f4560ae83d3c174a15a
     # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
     # the cluster will set imagePullPolicy to IfNotPresent
     # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
@@ -41,40 +43,76 @@ spec:
       source /utils.sh
       trap 'handle_error $(results.TEST_OUTPUT.path)' EXIT
 
+      images_processed_template='{"image": {"pullspec": "'"$IMAGE_URL"'", "digests": [%s]}}'
       mkdir /manifests/ && cd /manifests/
 
-      image_with_digest="${IMAGE_URL}@${IMAGE_DIGEST}"
+      imagewithouttag=$(echo $IMAGE_URL | sed "s/\(.*\):.*/\1/" | tr -d '\n')
+      image_with_digest=$(echo $imagewithouttag@$IMAGE_DIGEST)
+      digests_processed=()
 
-      if ! oc image extract --registry-config ~/.docker/config.json "${image_with_digest}" --path '/root/buildinfo/content_manifests/*:/manifests/'; then
-        echo "Failed to extract manifests from image ${image_with_digest}."
-        note="Task $(context.task.name) failed: Failed to extract manifests from image ${image_with_digest} with oc extract. For details, check Tekton task log."
-        ERROR_OUTPUT=$(make_result_json -r "ERROR" -t "$note")
+      # check if the image is a manifest list
+      image_manifests=$(get_image_manifests -i ${image_with_digest})
+      echo "$image_manifests"
+      if [ -n "$image_manifests" ]; then
+        while read -r arch arch_sha; do
+          destination=$(echo content-$arch)
+          mkdir -p "$destination"
+          arch_imageanddigest=$(echo $imagewithouttag@$arch_sha)
+          echo "arch sha is $arch_sha"
+
+          echo "Running \"oc image extract\" on image of arch $arch"
+          oc image extract --registry-config ~/.docker/config.json $arch_imageanddigest --path="/root/buildinfo/content_manifests/*:/manifests/${destination}" --filter-by-os="linux/${arch}"
+          if [ $? -ne 0 ]; then
+            echo "Failed to extract manifests from image $arch_imageanddigest of arch $arch."
+            note="Task $(context.task.name) failed: Failed to extract manifests from image ${arch_imageanddigest} with oc extract. For details, check Tekton task log."
+            ERROR_OUTPUT=$(make_result_json -r "ERROR" -t "$note")
+          fi
+          digests_processed+=("\"$arch_sha\"")
+        done < <(echo "$image_manifests" | jq -r 'to_entries[] | "\(.key) \(.value)"')
       fi
 
-      touch fail_result.txt
-      if [ -f "sbom-cyclonedx.json" ]
-      then
-        result=$(echo -n $(sbom-utility validate --input-file sbom-cyclonedx.json))
-        if [[ ! $result =~ "SBOM valid against JSON schema: `true`" ]]
-        then
-          echo "sbom-cyclonedx.json: $result" > fail_result.txt
+      # arrays to keep count of successful and failed checks
+      successes=()
+      failures=()
+      for directory in content-*; do
+        if [[ -d "$directory" ]]; then
+          directory_suffix=$(basename "$directory" | sed 's/content-//')
+
+          touch fail_result.txt
+          if [ -f "$directory/sbom-cyclonedx.json" ]; then
+            result=$(echo -n $(sbom-utility validate --input-file "$directory/sbom-cyclonedx.json"))
+            if [[ ! $result =~ "SBOM valid against JSON schema: `true`" ]]; then
+              echo -e "$directory_suffix sbom-cyclonedx.json: $result\n" > fail_result.txt
+              failures+=("$directory_suffix")
+            else
+              successes+=("$directory_suffix")
+            fi
+          else
+            echo -e "Cannot access sbom-cyclonedx.json for directory_suffix : No such file or directory exists.\n" > fail_result.txt
+            failures+=("$directory_suffix")
+          fi
         fi
-      else
-        echo "Cannot access sbom-cyclonedx.json: No such file or directory exists." > fail_result.txt
-      fi
+      done
+
+      echo "Success: (${successes[@]}) and Failures: (${failures[@]})"
+      success_count=${#successes[@]}
+      failure_count=${#failures[@]}
 
       FAIL_RESULTS="$(cat fail_result.txt)"
-      if [[ -z $FAIL_RESULTS ]]
-      then
+      if [[ -z $FAIL_RESULTS ]]; then
+        echo "SBOMs were validated for image $IMAGE_URL (${successes[@]})"
         note="Task $(context.task.name) completed: Check result for JSON check result."
-        TEST_OUTPUT=$(make_result_json -r "SUCCESS" -s 1 -t "$note")
+        TEST_OUTPUT=$(make_result_json -r "SUCCESS" -s $success_count -f $failure_count -t "$note")
       else
-        echo "Failed to verify sbom-cyclonedx.json for image $IMAGE_URL with reason: $FAIL_RESULTS."
+        echo "Failed to verify sbom-cyclonedx.json for image $IMAGE_URL (${failures[@]}) with reason: $FAIL_RESULTS."
         note="Task $(context.task.name) failed: Failed to verify SBOM for image $IMAGE_URL."
-        ERROR_OUTPUT=$(make_result_json -r "FAILURE" -f 1 -t "$note")
+        ERROR_OUTPUT=$(make_result_json -r "FAILURE" -s $success_count -f $failure_count -t "$note")
       fi
 
       echo "${TEST_OUTPUT:-${ERROR_OUTPUT}}" | tee $(results.TEST_OUTPUT.path)
+
+      digests_processed_string=$(IFS=,; echo "${digests_processed[*]}")
+      echo "${images_processed_template/\[%s]/[$digests_processed_string]}" | tee $(results.IMAGES_PROCESSED.path)
   volumes:
   - name: shared
     emptyDir: {}
