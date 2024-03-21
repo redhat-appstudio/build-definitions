@@ -18,7 +18,8 @@ spec:
       type: string
   steps:
     - name: e2e-test
-      image: quay.io/redhat-appstudio/e2e-tests:c18b86ccadcc8818d8d0e6e07d2dd4e98c7b5af8
+      # image: quay.io/redhat-appstudio/e2e-tests:c18b86ccadcc8818d8d0e6e07d2dd4e98c7b5af8
+      image: quay.io/mytestworkload/e2e-tests:STONEBLD-1832-check-including-parent-sources-ea0df3938d1fd90542e90eec99716ebbdcb176e6
       # a la infra-deployment updates, when PRs merge in e2e-tests, PRs will be opened
       # against build-definitions to update this tag
       args: [
@@ -26,7 +27,9 @@ spec:
         "--ginkgo.no-color"
       ]
       securityContext:
-        runAsUser: 1000
+        capabilities:
+          add:
+          - SETFCAP
       env:
       - name: APP_SUFFIX
         value: "$(params.app_suffix)"
