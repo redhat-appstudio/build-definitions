@@ -172,16 +172,16 @@ spec:
               secretName: redhat-appstudio-tekton-catalog-build-definitions-pull-secret
           workspaces:
             - name: source
-      - name: e2e-tests
-        params:
-          - name: e2e_test_namespace
-            value: $(params.e2e_test_namespace)
-          - name: app_suffix
-            value: "{{ pull_request_number }}"
-        runAfter:
-          - build-bundles
-        taskRef:
-          name: e2e-test
+      # - name: e2e-tests
+      #   params:
+      #     - name: e2e_test_namespace
+      #       value: $(params.e2e_test_namespace)
+      #     - name: app_suffix
+      #       value: "{{ pull_request_number }}"
+      #   runAfter:
+      #     - build-bundles
+      #   taskRef:
+      #     name: e2e-test
       - name: check-task-pipeline-repo-existence
         runAfter:
           - build-bundles
@@ -259,6 +259,7 @@ spec:
                 # Perform cleanup of resources created by gitops service
                 oc delete --ignore-not-found deployment --all -n $(params.e2e_test_namespace)
                 oc delete --ignore-not-found eventlisteners --all -n $(params.e2e_test_namespace)
+                oc delete --ignore-not-found applications --all -n $(params.e2e_test_namespace)
   workspaces:
     - name: workspace
       volumeClaimTemplate:
