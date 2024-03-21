@@ -1,4 +1,10 @@
 ---
+# IMPORTANT: This Task definition exists in this repository as a means to facilitate integration
+# with RHTAP. It is NOT meant to be used in Konflux. If you are debugging EC failures in Konflux,
+# this is NOT the file you are looking for. Do NOT directly modify this file. Any change should
+# first be done in the https://github.com/enterprise-contract/ec-cli repository then synced to this
+# repository. Any pull request that modifies anything other than this comment in this file and is
+# not a sync from the ec-cli repository will be immediately closed.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
