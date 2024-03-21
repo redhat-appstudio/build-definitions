@@ -259,6 +259,11 @@ spec:
                 # Perform cleanup of resources created by gitops service
                 oc delete --ignore-not-found deployment --all -n $(params.e2e_test_namespace)
                 oc delete --ignore-not-found eventlisteners --all -n $(params.e2e_test_namespace)
+                for name in $(
+                  oc get pipelineruns --namespace $(params.e2e_test_namespace) -o jsonpath='{range .items[?(@.metadata.deletionTimestamp < "'$(date -d "1 days ago" --utc +%Y-%m-%dT%H:%M:%SZ)'")]}{.metadata.name}{"\n"}{end}'); do
+                  oc patch pipelinerun "$name" -n $(params.e2e_test_namespace) --type json --patch='[ { "op": "remove", "path": "/metadata/finalizers" } ]'
+                done
+
   workspaces:
     - name: workspace
       volumeClaimTemplate:
