@@ -182,6 +182,8 @@ spec:
           - build-bundles
         taskRef:
           name: e2e-test
+        # Added a timeout due to https://issues.redhat.com/browse/STONEBLD-2265
+        timeout: "2h"
       - name: check-task-pipeline-repo-existence
         runAfter:
           - build-bundles
@@ -259,6 +261,9 @@ spec:
                 # Perform cleanup of resources created by gitops service
                 oc delete --ignore-not-found deployment --all -n $(params.e2e_test_namespace)
                 oc delete --ignore-not-found eventlisteners --all -n $(params.e2e_test_namespace)
+  # Added a timeout due to https://issues.redhat.com/browse/STONEBLD-2265
+  timeouts:
+    pipeline: "2h"
   workspaces:
     - name: workspace
       volumeClaimTemplate:

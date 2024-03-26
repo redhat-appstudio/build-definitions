@@ -40,7 +40,7 @@ spec:
     - name: IMAGE_URL
       value: $(params.IMAGE_URL)
     script: |
-      #!/busybox/sh
+      #!/bin/bash
       status=-1
       max_try=5
       wait_sec=2

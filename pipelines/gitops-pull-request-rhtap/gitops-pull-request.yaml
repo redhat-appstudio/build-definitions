@@ -11,6 +11,10 @@ spec:
       name: revision
       type: string
       default: ""
+    - description: The target branch for the pull request
+      name: target-branch
+      type: string
+      default: "main"
     - description: Enterprise Contract policy to validate against
       name: ec-policy-configuration
       type: string
@@ -38,6 +42,10 @@ spec:
           value: $(params.git-url)
         - name: revision
           value: $(params.revision)
+        # We're more interested in remote branches than tags, but this fetches both.
+        # Branch refs are needed for the TARGET_BRANCH feature of gather-deploy-images.
+        - name: fetchTags
+          value: "true"
       taskRef:
         name: git-clone
         version: "0.1"
@@ -47,6 +55,9 @@ spec:
         - name: basic-auth
           workspace: git-auth
     - name: gather-deploy-images
+      params:
+        - name: TARGET_BRANCH
+          value: $(params.target-branch)
       runAfter:
         - clone-repository
       taskRef:
@@ -71,6 +82,10 @@ spec:
           value: $(params.ec-tuf-mirror)
       runAfter:
         - gather-deploy-images
+      when:
+        - input: $(tasks.gather-deploy-images.results.IMAGES_TO_VERIFY)
+          operator: notin
+          values: [""]
       taskRef:
         name: verify-enterprise-contract
         version: "0.1"

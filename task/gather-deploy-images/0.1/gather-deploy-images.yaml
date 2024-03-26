@@ -7,22 +7,55 @@ spec:
   workspaces:
     - description: Should contain a cloned gitops repo at the ./source subpath
       name: source
+  params:
+    - name: TARGET_BRANCH
+      description: >
+        If specified, will gather only the images that changed between
+        the current revision and the target branch. Useful for pull requests.
+        Note that the repository cloned on the source workspace must already
+        contain the origin/$TARGET_BRANCH reference.
+      type: string
+      default: ""
   results:
     - name: IMAGES_TO_VERIFY
-      description: The images to be verified, in a format compatible with https://github.com/redhat-appstudio/build-definitions/tree/main/task/verify-enterprise-contract/0.1
+      description: >
+        The images to be verified, in a format compatible with
+        https://github.com/redhat-appstudio/build-definitions/tree/main/task/verify-enterprise-contract/0.1.
+        When there are no images to verify, this is an empty string.
   steps:
   - name: get-images-per-env
     image: quay.io/redhat-appstudio/appstudio-utils:5bd7d6cb0b17f9f2eab043a8ad16ba3d90551bc2@sha256:8c7fcf86af40c71aeb58e4279625c8308af5144e2f6b8e28b0ec7e795260e5f7
     workingDir: $(workspaces.source.path)/source
+    env:
+      - name: TARGET_BRANCH
+        value: $(params.TARGET_BRANCH)
     script: |
       #!/bin/bash
       set -euo pipefail
 
+      IMAGE_PATH='.spec.template.spec.containers[0].image'
       component_name=$(yq .metadata.name application.yaml)
 
       for env in development stage prod; do
-        yq '.spec.template.spec.containers[0].image' "components/${component_name}/overlays/${env}/deployment-patch.yaml"
+        yaml_path=components/${component_name}/overlays/${env}/deployment-patch.yaml
+        image=$(yq "$IMAGE_PATH" "$yaml_path")
+
+        if [ -n "$TARGET_BRANCH" ]; then
+          prev_image=$(git show "origin/$TARGET_BRANCH:$yaml_path" | yq "$IMAGE_PATH")
+          if [ "$prev_image" = "$image" ]; then
+            # don't check images that didn't change between the current revision and the target branch
+            continue
+          fi
+        fi
+
+        printf "%s\n" "$image"
       done | sort -u > /tmp/all-images.txt
+
+      if [ ! -s /tmp/all-images.txt ]; then
+        echo "No images to verify"
+        touch $(results.IMAGES_TO_VERIFY.path)
+        exit 0
+      fi
 
       # TODO: each component needs a {"source": {"git": {"url": "...", "revision": "..."}}}
       #       will that be too large for Tekton results?

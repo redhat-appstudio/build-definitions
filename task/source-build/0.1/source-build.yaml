@@ -82,6 +82,12 @@ spec:
         registry.redhat.io
         "
 
+        ## This is needed for the builds performed by the rpm-ostree task
+        ## otherwise, we can see this error:
+        ## "fatal: detected dubious ownership in repository at '/workspace/workspace/source'"
+        ##
+        git config --global --add safe.directory $SOURCE_DIR
+
         ${app_dir}/appenv/bin/python3 ${app_dir}/source_build.py \
           --output-binary-image "$BINARY_IMAGE" \
           --workspace /var/source-build \

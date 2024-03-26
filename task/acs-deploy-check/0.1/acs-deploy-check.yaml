@@ -49,7 +49,7 @@ spec:
         oc annotate taskrun $(context.taskRun.name) task.output.location=logs
 
     - name: rox-deploy-check
-      image: quay.io/redhat-appstudio/task-toolset@sha256:931a9f7886586391ccb38d33fd15a47eb03568f9b19512b0a57a56384fa52a3c
+      image: quay.io/redhat-appstudio/appstudio-utils:5bd7d6cb0b17f9f2eab043a8ad16ba3d90551bc2@sha256:8c7fcf86af40c71aeb58e4279625c8308af5144e2f6b8e28b0ec7e795260e5f7
       volumeMounts:
         - name: repository
           mountPath: /workspace/repository
@@ -108,12 +108,9 @@ spec:
         fi
         chmod +x ./roxctl  > /dev/null
 
-        # https://github.com/user-org/test-component-gitops => test-component
-        gitops_repo_name=$(basename ${PARAM_GITOPS_REPO_URL})
-        component_id=${gitops_repo_name%'-gitops'}
-
-        echo "Performing scan for ${component_id} component"
-        file_to_check="components/${component_id}/base/deployment.yaml"
+        component_name=$(yq .metadata.name application.yaml)
+        echo "Performing scan for ${component_name} component"
+        file_to_check="components/${component_name}/base/deployment.yaml"
         if [ -f "$file_to_check" ]; then
           echo "ROXCTL on $file_to_check"
           ./roxctl deployment check \

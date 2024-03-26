@@ -23,7 +23,7 @@ spec:
         optional: true
   steps:
     - name: patch-gitops
-      image: quay.io/redhat-appstudio/task-toolset@sha256:931a9f7886586391ccb38d33fd15a47eb03568f9b19512b0a57a56384fa52a3c
+      image: quay.io/redhat-appstudio/appstudio-utils:5bd7d6cb0b17f9f2eab043a8ad16ba3d90551bc2@sha256:8c7fcf86af40c71aeb58e4279625c8308af5144e2f6b8e28b0ec7e795260e5f7
       volumeMounts:
         - name: gitops-auth-secret
           mountPath: /gitops-auth-secret
@@ -34,7 +34,7 @@ spec:
           value: $(params.image)
       script: |
         if test -f /gitops-auth-secret/password ; then
-          gitops_repo_url=${PARAM_GITOPS_REPO_URL}
+          gitops_repo_url=${PARAM_GITOPS_REPO_URL%'.git'}
           remote_without_protocol=${gitops_repo_url#'https://'}
 
           password=$(cat /gitops-auth-secret/password)
@@ -53,21 +53,21 @@ spec:
           exit 0
         fi
 
-        # https://github.com/user-org/test-component-gitops => test-component
-        gitops_repo_name=$(basename ${PARAM_GITOPS_REPO_URL})
-        component_id=${gitops_repo_name%'-gitops'}
-        deployment_patch_filepath="components/${component_id}/overlays/development/deployment-patch.yaml"
-
         git config --global user.email "rhtap@noreplay.com"
         git config --global user.name "gitops-update"
 
         git clone ${PARAM_GITOPS_REPO_URL}
+        gitops_repo_name=$(basename ${gitops_repo_url})
         cd ${gitops_repo_name}
 
-        sed -i "s| image: .*| image: ${PARAM_IMAGE}|" $deployment_patch_filepath
+        component_name=$(yq .metadata.name application.yaml)
+        deployment_patch_filepath="components/${component_name}/overlays/development/deployment-patch.yaml"
+        IMAGE_PATH='.spec.template.spec.containers[0].image'
+        old_image=$(yq "${IMAGE_PATH}" "${deployment_patch_filepath}")
+        yq e -i "${IMAGE_PATH} |= \"${PARAM_IMAGE}\"" "${deployment_patch_filepath}"
 
         git add .
-        git commit -m "Update '${component_id}' component image to: ${PARAM_IMAGE}"
+        git commit -m "Update '${component_name}' component image to: ${PARAM_IMAGE}"
         git remote set-url origin $origin_with_auth
         git push 2> /dev/null || \
         {
@@ -75,3 +75,4 @@ spec:
           echo 'Do you have correct git credentials configured?'
           exit 1
         }
+        echo "Successfully updated development image from ${old_image} to ${PARAM_IMAGE}"
