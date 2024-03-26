@@ -4,8 +4,7 @@ kind: PipelineRun
 metadata:
   name: build-definitions-pull-request
   annotations:
-    pipelinesascode.tekton.dev/on-event: "pull_request"
-    pipelinesascode.tekton.dev/on-target-branch: "main"
+    pipelinesascode.tekton.dev/on-cel-expression: (event == "pull_request" && target_branch == "main") || (event == "push" && target_branch.startsWith("gh-readonly-queue/main/"))
     pipelinesascode.tekton.dev/task: "[task/git-clone/0.1/git-clone.yaml, .tekton/tasks/buildah.yaml, .tekton/tasks/yaml-lint.yaml, .tekton/tasks/e2e-test.yaml, task/sast-snyk-check/0.1/sast-snyk-check.yaml]"
     pipelinesascode.tekton.dev/task-2: "yaml-lint"
     pipelinesascode.tekton.dev/max-keep-runs: "5"
