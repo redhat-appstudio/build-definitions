@@ -12,7 +12,7 @@
   path: /spec/tasks/3/taskRef
   value:
     name: s2i-java
-    version: "0.1"
+    version: "0.2"
 - op: add
   path: /spec/tasks/3/params
   value:
@@ -24,6 +24,8 @@
     value: "$(params.image-expires-after)"
   - name: COMMIT_SHA
     value: "$(tasks.clone-repository.results.commit)"
+  - name: SOURCE_ARTIFACT
+    value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
 - op: add
   path: /spec/results/-
   value:

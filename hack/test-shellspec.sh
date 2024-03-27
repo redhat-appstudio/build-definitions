@@ -20,7 +20,7 @@ function cleanup() {
 trap cleanup EXIT
 readarray CHANGED_FILES < <({ if [[ -n "${GITHUB_ACTIONS:-}" ]]; then git diff HEAD~1 --name-only; else git diff .."${REF}" --name-only; git status --porcelain=v1 | cut -c 4-; fi; }| uniq)
 
-BIN_BASH=`which bash`
+BIN_BASH=$(which bash)
 for CHANGED in "${CHANGED_FILES[@]}"; do
     CHANGED_DIR="${ROOT}/$(dirname "${CHANGED}")"
     for SPEC_DIR in "${SPEC_DIRS[@]}"; do

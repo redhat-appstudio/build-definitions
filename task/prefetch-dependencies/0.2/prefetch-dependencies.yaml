@@ -1,0 +1,93 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.2"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: "image-build, hacbs"
+  name: prefetch-dependencies
+spec:
+  description: |-
+    Task that uses Cachi2 to prefetch build dependencies.
+    See docs at https://github.com/containerbuildsystem/cachi2#basic-usage.
+  params:
+  - description: Configures project packages that will have their dependencies prefetched.
+    name: input
+  - description: Execute the build with network isolation.
+    name: hermetic
+    default: false
+  - name: SOURCE_ARTIFACT
+    type: string
+    description: The source trusted artifact URI
+  results:
+  - name: SOURCE_ARTIFACT
+    type: string
+    description: The produced source trusted artifact URI
+  - name: CACHI2_ARTIFACT
+    type: string
+    description: The produced prefetched dependencies trusted artifact URI
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+  steps:
+  - name: use-trusted-artifact
+    image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:2741aaaf0c06ab784dcab99545be615696d05a578bd4ae5a1b2d6e17e5c569c4
+    args:
+      - use
+      - --store
+      - $(workspaces.source.path)
+      - $(params.SOURCE_ARTIFACT)=/var/workdir/source
+    workspaces:
+      - name: source
+  - image: quay.io/redhat-appstudio/cachi2:0.6.0@sha256:15d0513ed891b1d34fc46e56fdc9f6b457c90fbfd34f6a8c8fce6d3400ddc4a7
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    name: prefetch-dependencies
+    env:
+    - name: INPUT
+      value: $(params.input)
+    - name: HERMETIC
+      value: $(params.hermetic)
+    script: |
+      if [ "${HERMETIC}" != "true" ]
+      then
+        echo "The build is not configured to be run hermetically (hermetic: ${HERMETIC})."
+        exit 0
+      fi
+      if [ -z "${INPUT}" ]
+      then
+        echo "Build will be executed with network isolation, but no content was configured to be prefetched."
+        exit 0
+      fi
+
+      cachi2 fetch-deps \
+      --source=/var/workdir/source \
+      --output=/var/workdir/cachi2/output \
+      "${INPUT}"
+
+      cachi2 generate-env /var/workdir/cachi2/output \
+      --format env \
+      --for-output-dir=/cachi2/output \
+      --output /var/workdir/cachi2/cachi2.env
+
+      cachi2 inject-files /var/workdir/cachi2/output \
+      --for-output-dir=/cachi2/output
+  - name: create-trusted-artifact
+    image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:2741aaaf0c06ab784dcab99545be615696d05a578bd4ae5a1b2d6e17e5c569c4
+    args:
+      - create
+      - --store
+      - $(workspaces.source.path)
+      - $(results.SOURCE_ARTIFACT.path)=/var/workdir/source
+      - $(results.CACHI2_ARTIFACT.path)=/var/workdir/cachi2
+    workspaces:
+      - name: source
+  volumes:
+  - name: workdir
+    emptyDir: {}
+  workspaces:
+  - name: source
+    description: Workspace with the trusted artifacts

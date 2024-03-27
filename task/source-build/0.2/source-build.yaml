@@ -1,0 +1,116 @@
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: source-build
+  labels:
+    app.kubernetes.io/version: "0.2"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: "appstudio"
+spec:
+  description: Source image build.
+  params:
+    - name: BINARY_IMAGE
+      description: Binary image name from which to generate the source image name.
+      type: string
+    - name: BASE_IMAGES
+      description: >-
+        Base images used to build the binary image. Each image per line in the same order of FROM
+        instructions specified in a multistage Dockerfile. Default to an empty string, which means
+        to skip handling a base image.
+      type: string
+      default: ""
+    - name: SOURCE_ARTIFACT
+      type: string
+      description: The produced source trusted artifact URI
+    - name: CACHI2_ARTIFACT
+      type: string
+      description: The produced prefetched dependencies trusted artifact URI
+      default: ""
+  results:
+    - name: BUILD_RESULT
+      description: Build result.
+    - name: SOURCE_IMAGE_URL
+      description: The source image url.
+    - name: SOURCE_IMAGE_DIGEST
+      description: The source image digest.
+  workspaces:
+    - name: workspace
+      description: The workspace where source code is included.
+  volumes:
+    - name: source-build-work-place
+      emptyDir: {}
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+  steps:
+    - name: use-trusted-artifact
+      image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:2741aaaf0c06ab784dcab99545be615696d05a578bd4ae5a1b2d6e17e5c569c4
+      args:
+        - use
+        - --store
+        - $(workspaces.workspace.path)
+        - $(params.SOURCE_ARTIFACT)=/var/workdir/source
+        - $(params.CACHI2_ARTIFACT)=/var/workdir/cachi2
+      workspaces:
+        - name: workspace
+    - name: build
+      image: quay.io/redhat-appstudio/build-definitions-source-image-build-utils@sha256:e5865a663af8faa4816802b449e3f9988db00dc93918f55397fea7139e03a6a9
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      computeResources:
+        limits:
+          memory: 2Gi
+        requests:
+          memory: 512Mi
+          cpu: 250m
+      workingDir: "/var/source-build"
+      securityContext:
+        runAsUser: 0
+        capabilities:
+          add:
+            - SETFCAP
+      volumeMounts:
+        - name: source-build-work-place
+          mountPath: /var/source-build
+      env:
+        - name: BINARY_IMAGE
+          value: "$(params.BINARY_IMAGE)"
+        - name: SOURCE_DIR
+          value: /var/workdir/source
+        - name: BASE_IMAGES
+          value: "$(params.BASE_IMAGES)"
+        - name: RESULT_FILE
+          value: "$(results.BUILD_RESULT.path)"
+        - name: CACHI2_ARTIFACTS_DIR
+          value: /var/workdir/cachi2
+        - name: RESULT_SOURCE_IMAGE_URL
+          value: "$(results.SOURCE_IMAGE_URL.path)"
+        - name: RESULT_SOURCE_IMAGE_DIGEST
+          value: "$(results.SOURCE_IMAGE_DIGEST.path)"
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        app_dir=/opt/source_build
+        registry_allowlist="
+        registry.access.redhat.com
+        registry.redhat.io
+        "
+
+        ${app_dir}/appenv/bin/python3 ${app_dir}/source_build.py \
+          --output-binary-image "$BINARY_IMAGE" \
+          --workspace /var/source-build \
+          --source-dir "$SOURCE_DIR" \
+          --base-images "$BASE_IMAGES" \
+          --write-result-to "$RESULT_FILE" \
+          --cachi2-artifacts-dir "$CACHI2_ARTIFACTS_DIR" \
+          --registry-allowlist="$registry_allowlist"
+
+        cat "$RESULT_FILE" | jq -r ".image_url" >"$RESULT_SOURCE_IMAGE_URL"
+        cat "$RESULT_FILE" | jq -r ".image_digest" >"$RESULT_SOURCE_IMAGE_DIGEST"

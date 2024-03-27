@@ -1,0 +1,9 @@
+- op: replace
+  path: /metadata/name
+  value: buildah-6gb
+- op: replace
+  path: /spec/steps/1/computeResources/limits/memory
+  value: 6Gi
+- op: replace
+  path: /spec/steps/1/computeResources/requests/memory
+  value: 4Gi

@@ -14,7 +14,7 @@ patches:
       path: /spec/tasks/3/taskRef
       value:
         name: tkn-bundle
-        version: "0.1"
+        version: "0.2"
     - op: add
       path: /spec/tasks/3/params
       value:
@@ -22,6 +22,8 @@ patches:
         value: $(params.output-image)
       - name: CONTEXT
         value: $(params.path-context)
+      - name: SOURCE_ARTIFACT
+        value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
     # Remove tasks that assume a binary image
     - op: remove
       path: /spec/tasks/9  # sbom-json-check

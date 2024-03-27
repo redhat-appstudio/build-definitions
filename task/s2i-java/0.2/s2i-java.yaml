@@ -1,0 +1,306 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.2"
+    build-definition.include: add-sbom-and-push
+    build.appstudio.redhat.com/build_type: "java"
+  annotations:
+    tekton.dev/displayName: s2i java
+    tekton.dev/pipelines.minVersion: "0.19"
+    tekton.dev/tags: s2i, java, workspace
+  name: s2i-java
+spec:
+  description: |
+    s2i-java task builds source code into a container image and pushes the image into container registry using S2I and buildah tool.
+    In addition it generates a SBOM file, injects the SBOM file into final container image and pushes the SBOM file as separate image using cosign tool.
+    When [Java dependency rebuild](https://redhat-appstudio.github.io/docs.stonesoup.io/Documentation/main/cli/proc_enabled_java_dependencies.html) is enabled it triggers rebuilds of Java artifacts.
+  params:
+  - default: registry.access.redhat.com/ubi9/openjdk-17:1.13-10.1669632202
+    description: Java builder image
+    name: BASE_IMAGE
+    type: string
+  - default: .
+    description: The location of the path to run s2i from
+    name: PATH_CONTEXT
+    type: string
+  - default: "true"
+    description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+    name: TLSVERIFY
+    type: string
+  - description: Location of the repo where image has to be pushed
+    name: IMAGE
+    type: string
+  - default: ""
+    description: Deprecated. Has no effect. Will be removed in the future.
+    name: BUILDER_IMAGE
+    type: string
+  - default: ""
+    description: unused, should be removed in next task version
+    name: DOCKER_AUTH
+    type: string
+  - default: ""
+    description: Delete image tag after specified time. Empty means to keep the image tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
+    name: IMAGE_EXPIRES_AFTER
+    type: string
+  - name: COMMIT_SHA
+    description: The image is built from this commit.
+    type: string
+    default: ""
+  - name: SOURCE_ARTIFACT
+    type: string
+    description: The produced source trusted artifact URI
+  - name: CACHI2_ARTIFACT
+    type: string
+    description: The produced prefetched dependencies trusted artifact URI
+    default: ""
+  results:
+  - description: Digest of the image just built
+    name: IMAGE_DIGEST
+  - description: Image repository where the built image was pushed
+    name: IMAGE_URL
+  - description: Digests of the base images used for build
+    name: BASE_IMAGES_DIGESTS
+  - name: SBOM_JAVA_COMPONENTS_COUNT
+    description: The counting of Java components by publisher in JSON format
+    type: string
+  - name: JAVA_COMMUNITY_DEPENDENCIES
+    description: The Java dependencies that came from community sources such as Maven central.
+  stepTemplate:
+    env:
+    - name: BUILDAH_FORMAT
+      value: oci
+    - name: STORAGE_DRIVER
+      value: vfs
+    - name: PATH_CONTEXT
+      value: $(params.PATH_CONTEXT)
+    - name: BASE_IMAGE
+      value: $(params.BASE_IMAGE)
+    - name: TLSVERIFY
+      value: $(params.TLSVERIFY)
+    - name: IMAGE
+      value: $(params.IMAGE)
+    - name: IMAGE_EXPIRES_AFTER
+      value: $(params.IMAGE_EXPIRES_AFTER)
+    - name: BUILDER_IMAGE
+      value: $(params.BUILDER_IMAGE)
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+  steps:
+  - name: use-trusted-artifact
+    image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:2741aaaf0c06ab784dcab99545be615696d05a578bd4ae5a1b2d6e17e5c569c4
+    args:
+      - use
+      - --store
+      - $(workspaces.source.path)
+      - $(params.SOURCE_ARTIFACT)=/var/workdir/source
+    workspaces:
+      - name: source
+  - args:
+    - |-
+      echo "MAVEN_CLEAR_REPO=true" > env-file
+      [ -n "$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR" ] &&
+        echo "MAVEN_MIRROR_URL=http://$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR/v1/cache/default/0/" >> env-file
+
+      echo "Generated Env file"
+      echo "------------------------------"
+      cat env-file
+      echo "------------------------------"
+      s2i build $PATH_CONTEXT $BASE_IMAGE --image-scripts-url image:///usr/local/s2i --as-dockerfile /gen-source/Dockerfile.gen --environment-file env-file
+
+    command:
+    - /bin/sh
+    - -c
+    env:
+    - name: HOME
+      value: /tekton/home
+    image: registry.redhat.io/ocp-tools-4-tech-preview/source-to-image-rhel8@sha256:637c15600359cb45bc01445b5e811b6240ca239f0ebfe406b50146e34f68f631
+    name: s2i-gen
+    computeResources: {}
+    workingDir: /var/workdir/source
+    securityContext:
+      runAsUser: 0
+    volumeMounts:
+    - mountPath: /gen-source
+      name: gen-source
+  - script: |
+      if [ -n "${BUILDER_IMAGE}" ]; then
+        echo "WARNING: provided deprecated BUILDER_IMAGE parameter has no effect."
+      fi
+
+      # Fixing group permission on /var/lib/containers
+      chown root:root /var/lib/containers
+
+      LABELS=(
+        "--label" "build-date=$(date -u +'%Y-%m-%dT%H:%M:%S')"
+        "--label" "architecture=$(uname -m)"
+        "--label" "vcs-type=git"
+      )
+      [ -n "$COMMIT_SHA" ] && LABELS+=("--label" "vcs-ref=$COMMIT_SHA")
+      [ -n "$IMAGE_EXPIRES_AFTER" ] && LABELS+=("--label" "quay.expires-after=$IMAGE_EXPIRES_AFTER")
+
+      touch /var/lib/containers/java
+      sed -i 's/^short-name-mode = .*/short-name-mode = "disabled"/' /etc/containers/registries.conf
+      buildah build --tls-verify=$TLSVERIFY ${LABELS[@]} --ulimit nofile=4096:4096 -f /gen-source/Dockerfile.gen -t $IMAGE .
+
+      container=$(buildah from --pull-never $IMAGE)
+      buildah mount $container | tee /var/workdir/container_path
+      echo $container > /var/workdir/container_name
+    image: registry.access.redhat.com/ubi9/buildah:9.1.0-5@sha256:30eac1803d669d58c033838076a946156e49018e0d4f066d94896f0cc32030af
+    name: build
+    env:
+    - name: COMMIT_SHA
+      value: $(params.COMMIT_SHA)
+    computeResources:
+      limits:
+        memory: 4Gi
+      requests:
+        memory: 512Mi
+        cpu: 10m
+    securityContext:
+      runAsUser: 0
+      capabilities:
+        add:
+          - SETFCAP
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+    - mountPath: /gen-source
+      name: gen-source
+    workingDir: /gen-source
+
+  - image: quay.io/redhat-appstudio/syft:v0.105.0@sha256:32a9d2007f2b042ceec4ef32fa1d90b8d28141822e7d9748f240da9d55c56601
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    name: sbom-syft-generate
+    script: |
+      syft dir:/var/workdir/source --output cyclonedx-json=/var/workdir/sbom-source.json
+      find $(cat /var/workdir/container_path) -xtype l -delete
+      syft dir:$(cat /var/workdir/container_path) --output cyclonedx-json=/var/workdir/sbom-image.json
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+  - name: analyse-dependencies-java-sbom
+    image: quay.io/redhat-appstudio/hacbs-jvm-build-request-processor:127ee0c223a2b56a9bd20a6f2eaeed3bd6015f77
+    script: |
+      if [ -f /var/lib/containers/java ]; then
+        /opt/jboss/container/java/run/run-java.sh analyse-dependencies path $(cat /var/workdir/container_path) -s /var/workdir/sbom-image.json --task-run-name $(context.taskRun.name) --publishers $(results.SBOM_JAVA_COMPONENTS_COUNT.path)
+        sed -i 's/^/ /' $(results.SBOM_JAVA_COMPONENTS_COUNT.path) # Workaround for SRVKP-2875
+      else
+        touch $(results.JAVA_COMMUNITY_DEPENDENCIES.path)
+      fi
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+    securityContext:
+      runAsUser: 0
+  - image: registry.access.redhat.com/ubi9/python-39:1-165@sha256:4da8ddb12096a31d8d50e58ea479ba2fe2f252f215fbaf5bf90923a1827463ba
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    name: merge-sboms
+    script: |
+      #!/bin/python3
+      import json
+      import os
+
+      # load SBOMs
+      with open("./sbom-image.json") as f:
+        image_sbom = json.load(f)
+
+      with open("./sbom-source.json") as f:
+        source_sbom = json.load(f)
+
+      # fetch unique components from available SBOMs
+      def get_identifier(component):
+        return component["name"] + '@' + component.get("version", "")
+
+      image_sbom_components = image_sbom.get("components", [])
+      existing_components = [get_identifier(component) for component in image_sbom_components]
+
+      source_sbom_components = source_sbom.get("components", [])
+      for component in source_sbom_components:
+        if get_identifier(component) not in existing_components:
+          image_sbom_components.append(component)
+          existing_components.append(get_identifier(component))
+
+      image_sbom_components.sort(key=lambda c: get_identifier(c))
+
+      # write the CycloneDX unified SBOM
+      with open("./sbom-cyclonedx.json", "w") as f:
+        json.dump(image_sbom, f, indent=4)
+
+      # create and write the PURL unified SBOM
+      purls = [{"purl": component["purl"]} for component in image_sbom_components if "purl" in component]
+      purl_content = {"image_contents": {"dependencies": purls}}
+
+      with open("sbom-purl.json", "w") as output_file:
+        json.dump(purl_content, output_file, indent=4)
+
+    workingDir: /var/workdir
+    securityContext:
+      runAsUser: 0
+
+  - image: registry.access.redhat.com/ubi9/buildah:9.1.0-5@sha256:30eac1803d669d58c033838076a946156e49018e0d4f066d94896f0cc32030af
+    # default above is image digest specific
+    name: inject-sbom-and-push
+    computeResources: {}
+    script: |
+      if [ -n "${BUILDER_IMAGE}" ]; then
+        echo "WARNING: provided deprecated BUILDER_IMAGE parameter has no effect."
+      fi
+
+      # Expose base image digests
+      buildah images --format '{{ .Name }}:{{ .Tag }}@{{ .Digest }}' | grep -v $IMAGE > $(results.BASE_IMAGES_DIGESTS.path)
+
+      base_image_name=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.name"}}' $IMAGE | cut -f1 -d'@')
+      base_image_digest=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.digest"}}' $IMAGE)
+      container=$(buildah from --pull-never $IMAGE)
+      buildah copy $container sbom-cyclonedx.json sbom-purl.json /root/buildinfo/content_manifests/
+      buildah config -a org.opencontainers.image.base.name=${base_image_name} -a org.opencontainers.image.base.digest=${base_image_digest} $container
+      buildah commit $container $IMAGE
+      buildah push \
+        --tls-verify=$TLSVERIFY \
+        --digestfile /var/workdir/image-digest $IMAGE \
+        docker://$IMAGE
+      cat /var/workdir/image-digest | tee $(results.IMAGE_DIGEST.path)
+      echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
+
+    securityContext:
+      runAsUser: 0
+      capabilities:
+        add:
+          - SETFCAP
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+
+    workingDir: /var/workdir
+
+  - name: upload-sbom
+    image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    args:
+      - attach
+      - sbom
+      - --sbom
+      - sbom-cyclonedx.json
+      - --type
+      - cyclonedx
+      - $(params.IMAGE)
+    workingDir: /var/workdir
+
+  volumes:
+  - emptyDir: {}
+    name: varlibcontainers
+  - emptyDir: {}
+    name: gen-source
+  - name: workdir
+    emptyDir: {}
+  workspaces:
+  - name: source
+    description: Workspace with the trusted artifacts

@@ -1,0 +1,8 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: test1
+spec:
+  steps:
+    - name: test1-step
+      image: ubuntu

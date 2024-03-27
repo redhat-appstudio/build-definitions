@@ -79,25 +79,23 @@ spec:
           value: "$(params.revision)"
       taskRef:
         name: git-clone
-        version: "0.1"
+        version: "0.2"
       workspaces:
         - name: output
           workspace: workspace
         - name: basic-auth
           workspace: git-auth
     - name: prefetch-dependencies
-      when:
-      - input: $(params.hermetic)
-        operator: in
-        values: ["true"]
       params:
         - name: input
           value: $(params.prefetch-input)
-      runAfter:
-        - clone-repository
+        - name: hermetic
+          value: $(params.hermetic)
+        - name: SOURCE_ARTIFACT
+          value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
       taskRef:
         name: prefetch-dependencies
-        version: "0.1"
+        version: "0.2"
       workspaces:
         - name: source
           workspace: workspace
@@ -106,8 +104,6 @@ spec:
       - input: $(tasks.init.results.build)
         operator: in
         values: ["true"]
-      runAfter:
-        - prefetch-dependencies
       taskRef:
         name: $REPLACE_ME
       workspaces:
@@ -125,12 +121,16 @@ spec:
         - build-container
       taskRef:
         name: source-build
-        version: "0.1"
+        version: "0.2"
       params:
         - name: BINARY_IMAGE
           value: "$(params.output-image)"
         - name: BASE_IMAGES
           value: "$(tasks.build-container.results.BASE_IMAGES_DIGESTS)"
+        - name: SOURCE_ARTIFACT
+          value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+        - name: CACHI2_ARTIFACT
+          value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       workspaces:
         - name: workspace
           workspace: workspace
@@ -184,7 +184,10 @@ spec:
         - clone-repository
       taskRef:
         name: sast-snyk-check
-        version: "0.1"
+        version: "0.2"
+      params:
+      - name: SOURCE_ARTIFACT
+        value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
       workspaces:
       - name: workspace
         workspace: workspace

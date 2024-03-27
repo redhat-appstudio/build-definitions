@@ -1,0 +1,456 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.2"
+    build.appstudio.redhat.com/build_type: "docker"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: "image-build, appstudio, hacbs"
+  name: buildah
+spec:
+  description: |-
+    Buildah task builds source code into a container image and pushes the image into container registry using buildah tool.
+    In addition it generates a SBOM file, injects the SBOM file into final container image and pushes the SBOM file as separate image using cosign tool.
+    When [Java dependency rebuild](https://redhat-appstudio.github.io/docs.stonesoup.io/Documentation/main/cli/proc_enabled_java_dependencies.html) is enabled it triggers rebuilds of Java artifacts.
+    When prefetch-dependencies task was activated it is using its artifacts to run build in hermetic environment.
+  params:
+  - description: Reference of the image buildah will produce.
+    name: IMAGE
+    type: string
+  - default: ""
+    description: Deprecated. Has no effect. Will be removed in the future.
+    name: BUILDER_IMAGE
+    type: string
+  - default: ./Dockerfile
+    description: Path to the Dockerfile to build.
+    name: DOCKERFILE
+    type: string
+  - default: .
+    description: Path to the directory to use as context.
+    name: CONTEXT
+    type: string
+  - default: "true"
+    description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+    name: TLSVERIFY
+    type: string
+  - description: unused, should be removed in next task version
+    name: DOCKER_AUTH
+    type: string
+    default: ""
+  - default: "false"
+    description: Determines if build will be executed without network access.
+    name: HERMETIC
+    type: string
+  - default: ""
+    description: In case it is not empty, the prefetched content should be made available to the build.
+    name: PREFETCH_INPUT
+    type: string
+  - default: ""
+    description: Delete image tag after specified time. Empty means to keep the image tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
+    name: IMAGE_EXPIRES_AFTER
+    type: string
+  - name: COMMIT_SHA
+    description: The image is built from this commit.
+    type: string
+    default: ""
+  - name: YUM_REPOS_D_SRC
+    description: Path in the git repository in which yum repository files are stored
+    default: repos.d
+  - name: YUM_REPOS_D_FETCHED
+    description: Path in source workspace where dynamically-fetched repos are present
+    default: fetched.repos.d
+  - name: YUM_REPOS_D_TARGET
+    description: Target path on the container in which yum repository files should be made available
+    default: /etc/yum.repos.d
+  - name: TARGET_STAGE
+    description: Target stage in Dockerfile to build. If not specified, the Dockerfile is processed entirely to (and including) its last stage.
+    type: string
+    default: ""
+  - name: ENTITLEMENT_SECRET
+    description: Name of secret which contains the entitlement certificates
+    type: string
+    default: "etc-pki-entitlement"
+  - name: SOURCE_ARTIFACT
+    type: string
+    description: The produced source trusted artifact URI
+  - name: CACHI2_ARTIFACT
+    type: string
+    description: The produced prefetched dependencies trusted artifact URI
+    default: ""
+  results:
+  - description: Digest of the image just built
+    name: IMAGE_DIGEST
+  - description: Image repository where the built image was pushed
+    name: IMAGE_URL
+  - description: Digests of the base images used for build
+    name: BASE_IMAGES_DIGESTS
+  - name: SBOM_JAVA_COMPONENTS_COUNT
+    description: The counting of Java components by publisher in JSON format
+    type: string
+  - name: JAVA_COMMUNITY_DEPENDENCIES
+    description: The Java dependencies that came from community sources such as Maven central.
+  stepTemplate:
+    env:
+    - name: BUILDAH_FORMAT
+      value: oci
+    - name: STORAGE_DRIVER
+      value: vfs
+    - name: HERMETIC
+      value: $(params.HERMETIC)
+    - name: PREFETCH_INPUT
+      value: $(params.PREFETCH_INPUT)
+    - name: CONTEXT
+      value: $(params.CONTEXT)
+    - name: DOCKERFILE
+      value: $(params.DOCKERFILE)
+    - name: IMAGE
+      value: $(params.IMAGE)
+    - name: TLSVERIFY
+      value: $(params.TLSVERIFY)
+    - name: IMAGE_EXPIRES_AFTER
+      value: $(params.IMAGE_EXPIRES_AFTER)
+    - name: YUM_REPOS_D_SRC
+      value: $(params.YUM_REPOS_D_SRC)
+    - name: YUM_REPOS_D_FETCHED
+      value: $(params.YUM_REPOS_D_FETCHED)
+    - name: YUM_REPOS_D_TARGET
+      value: $(params.YUM_REPOS_D_TARGET)
+    - name: TARGET_STAGE
+      value: $(params.TARGET_STAGE)
+    - name: PARAM_BUILDER_IMAGE
+      value: $(params.BUILDER_IMAGE)
+    - name: ENTITLEMENT_SECRET
+      value: $(params.ENTITLEMENT_SECRET)
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+  steps:
+  - name: use-trusted-artifact
+    image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:2741aaaf0c06ab784dcab99545be615696d05a578bd4ae5a1b2d6e17e5c569c4
+    args:
+      - use
+      - --store
+      - $(workspaces.source.path)
+      - $(params.SOURCE_ARTIFACT)=/var/workdir/source
+      - $(params.CACHI2_ARTIFACT)=/var/workdir/cachi2
+    workspaces:
+      - name: source
+  - image: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
+    name: build
+    computeResources:
+      limits:
+        memory: 4Gi
+      requests:
+        memory: 512Mi
+        cpu: 250m
+    env:
+    - name: COMMIT_SHA
+      value: $(params.COMMIT_SHA)
+    script: |
+      if [ -n "${PARAM_BUILDER_IMAGE}" ]; then
+        echo "WARNING: provided deprecated BUILDER_IMAGE parameter has no effect."
+      fi
+
+      SOURCE_CODE_DIR=source
+      if [ -e "$SOURCE_CODE_DIR/$CONTEXT/$DOCKERFILE" ]; then
+        dockerfile_path="$SOURCE_CODE_DIR/$CONTEXT/$DOCKERFILE"
+      elif [ -e "$SOURCE_CODE_DIR/$DOCKERFILE" ]; then
+        dockerfile_path="$SOURCE_CODE_DIR/$DOCKERFILE"
+      elif echo "$DOCKERFILE" | grep -q "^https\?://"; then
+        echo "Fetch Dockerfile from $DOCKERFILE"
+        dockerfile_path=$(mktemp --suffix=-Dockerfile)
+        http_code=$(curl -s -L -w "%{http_code}" --output "$dockerfile_path" "$DOCKERFILE")
+        if [ $http_code != 200 ]; then
+          echo "No Dockerfile is fetched. Server responds $http_code"
+          exit 1
+        fi
+        http_code=$(curl -s -L -w "%{http_code}" --output "$dockerfile_path.dockerignore.tmp" "$DOCKERFILE.dockerignore")
+        if [ $http_code = 200 ]; then
+          echo "Fetched .dockerignore from $DOCKERFILE.dockerignore"
+          mv "$dockerfile_path.dockerignore.tmp" $SOURCE_CODE_DIR/$CONTEXT/.dockerignore
+        fi
+      else
+        echo "Cannot find Dockerfile $DOCKERFILE"
+        exit 1
+      fi
+      if [ -n "$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR" ] && grep -q '^\s*RUN \(./\)\?mvn' "$dockerfile_path"; then
+        sed -i -e "s|^\s*RUN \(\(./\)\?mvn\)\(.*\)|RUN echo \"<settings><mirrors><mirror><id>mirror.default</id><url>http://$JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR/v1/cache/default/0/</url><mirrorOf>*</mirrorOf></mirror></mirrors></settings>\" > /tmp/settings.yaml; \1 -s /tmp/settings.yaml \3|g" "$dockerfile_path"
+        touch /var/lib/containers/java
+      fi
+
+      # Fixing group permission on /var/lib/containers
+      chown root:root /var/lib/containers
+
+      sed -i 's/^\s*short-name-mode\s*=\s*.*/short-name-mode = "disabled"/' /etc/containers/registries.conf
+
+      # Setting new namespace to run buildah - 2^32-2
+      echo 'root:1:4294967294' | tee -a /etc/subuid >> /etc/subgid
+
+      BUILDAH_ARGS=()
+
+      BASE_IMAGES=$(grep -i '^\s*FROM' "$dockerfile_path" | sed 's/--platform=\S*//' | awk '{print $2}')
+      if [ "${HERMETIC}" == "true" ]; then
+        BUILDAH_ARGS+=("--pull=never")
+        UNSHARE_ARGS="--net"
+        for image in $BASE_IMAGES; do
+          if [ "${image}" != "scratch" ]; then
+            unshare -Ufp --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah pull $image
+          fi
+        done
+        echo "Build will be executed with network isolation"
+      fi
+
+      if [ -n "${TARGET_STAGE}" ]; then
+        BUILDAH_ARGS+=("--target=${TARGET_STAGE}")
+      fi
+
+      if [ -n "${PREFETCH_INPUT}" ]; then
+        cp -r cachi2 /tmp/
+        chmod -R go+rwX /tmp/cachi2
+        VOLUME_MOUNTS="--volume /tmp/cachi2:/cachi2"
+        sed -i 's|^\s*run |RUN . /cachi2/cachi2.env \&\& \\\n    |i' "$dockerfile_path"
+        echo "Prefetched content will be made available"
+      fi
+
+      # if yum repofiles stored in git, copy them to mount point outside the source dir
+      if [ -d "${SOURCE_CODE_DIR}/${YUM_REPOS_D_SRC}" ]; then
+        mkdir -p ${YUM_REPOS_D_FETCHED}
+        cp -r ${SOURCE_CODE_DIR}/${YUM_REPOS_D_SRC}/* ${YUM_REPOS_D_FETCHED}
+      fi
+
+      # if anything in the repofiles mount point (either fetched or from git), mount it
+      if [ -d "${YUM_REPOS_D_FETCHED}" ]; then
+        chmod -R go+rwX ${YUM_REPOS_D_FETCHED}
+        mount_point=$(realpath ${YUM_REPOS_D_FETCHED})
+        VOLUME_MOUNTS="${VOLUME_MOUNTS} --volume ${mount_point}:${YUM_REPOS_D_TARGET}"
+      fi
+
+      LABELS=(
+        "--label" "build-date=$(date -u +'%Y-%m-%dT%H:%M:%S')"
+        "--label" "architecture=$(uname -m)"
+        "--label" "vcs-type=git"
+      )
+      [ -n "$COMMIT_SHA" ] && LABELS+=("--label" "vcs-ref=$COMMIT_SHA")
+      [ -n "$IMAGE_EXPIRES_AFTER" ] && LABELS+=("--label" "quay.expires-after=$IMAGE_EXPIRES_AFTER")
+
+      ENTITLEMENT_PATH="/entitlement"
+      if [ -d "$ENTITLEMENT_PATH" ]; then
+        cp -r --preserve=mode "$ENTITLEMENT_PATH" /tmp/entitlement
+        VOLUME_MOUNTS="${VOLUME_MOUNTS} --volume /tmp/entitlement:/etc/pki/entitlement"
+        echo "Adding the entitlement to the build"
+      fi
+
+      unshare -Uf $UNSHARE_ARGS --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -- buildah build \
+        $VOLUME_MOUNTS \
+        ${BUILDAH_ARGS[@]} \
+        ${LABELS[@]} \
+        --tls-verify=$TLSVERIFY --no-cache \
+        --ulimit nofile=4096:4096 \
+        -f "$dockerfile_path" -t $IMAGE $SOURCE_CODE_DIR/$CONTEXT
+
+      container=$(buildah from --pull-never $IMAGE)
+      buildah mount $container | tee /var/workdir/container_path
+      echo $container > /var/workdir/container_name
+
+      # Save the SBOM produced by Cachi2 so it can be merged into the final SBOM later
+      if [ -n "${PREFETCH_INPUT}" ]; then
+        cp /tmp/cachi2/output/bom.json ./sbom-cachi2.json
+      fi
+
+      # Expose base image digests
+      for image in $BASE_IMAGES; do
+        if [ "${image}" != "scratch" ]; then
+          buildah images --format '{{ .Name }}:{{ .Tag }}@{{ .Digest }}' --filter reference="$image" >> $(results.BASE_IMAGES_DIGESTS.path)
+        fi
+      done
+
+    securityContext:
+      capabilities:
+        add:
+          - SETFCAP
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+    - mountPath: "/entitlement"
+      name: etc-pki-entitlement
+    workingDir: /var/workdir
+
+  - name: sbom-syft-generate
+    image: quay.io/redhat-appstudio/syft:v0.105.0@sha256:32a9d2007f2b042ceec4ef32fa1d90b8d28141822e7d9748f240da9d55c56601
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    script: |
+      syft dir:/var/workdir/source --output cyclonedx-json=/var/workdir/sbom-source.json
+      find $(cat /var/workdir/container_path) -xtype l -delete
+      syft dir:$(cat /var/workdir/container_path) --output cyclonedx-json=/var/workdir/sbom-image.json
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+  - name: analyse-dependencies-java-sbom
+    image: quay.io/redhat-appstudio/hacbs-jvm-build-request-processor:127ee0c223a2b56a9bd20a6f2eaeed3bd6015f77
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    script: |
+      if [ -f /var/lib/containers/java ]; then
+        /opt/jboss/container/java/run/run-java.sh analyse-dependencies path $(cat /var/workdir/container_path) -s /var/workdir/sbom-image.json --task-run-name $(context.taskRun.name) --publishers $(results.SBOM_JAVA_COMPONENTS_COUNT.path)
+        sed -i 's/^/ /' $(results.SBOM_JAVA_COMPONENTS_COUNT.path) # Workaround for SRVKP-2875
+      else
+        touch $(results.JAVA_COMMUNITY_DEPENDENCIES.path)
+      fi
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+    securityContext:
+      runAsUser: 0
+
+  - name: merge-syft-sboms
+    image: registry.access.redhat.com/ubi9/python-39:1-165@sha256:4da8ddb12096a31d8d50e58ea479ba2fe2f252f215fbaf5bf90923a1827463ba
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    script: |
+      #!/bin/python3
+      import json
+
+      # load SBOMs
+      with open("./sbom-image.json") as f:
+        image_sbom = json.load(f)
+
+      with open("./sbom-source.json") as f:
+        source_sbom = json.load(f)
+
+      # fetch unique components from available SBOMs
+      def get_identifier(component):
+        return component["name"] + '@' + component.get("version", "")
+
+      image_sbom_components = image_sbom.get("components", [])
+      existing_components = [get_identifier(component) for component in image_sbom_components]
+
+      source_sbom_components = source_sbom.get("components", [])
+      for component in source_sbom_components:
+        if get_identifier(component) not in existing_components:
+          image_sbom_components.append(component)
+          existing_components.append(get_identifier(component))
+
+      image_sbom_components.sort(key=lambda c: get_identifier(c))
+
+      # write the CycloneDX unified SBOM
+      with open("./sbom-cyclonedx.json", "w") as f:
+        json.dump(image_sbom, f, indent=4)
+    workingDir: /var/workdir
+    securityContext:
+      runAsUser: 0
+
+  - name: merge-cachi2-sbom
+    image: quay.io/redhat-appstudio/cachi2:0.6.0@sha256:15d0513ed891b1d34fc46e56fdc9f6b457c90fbfd34f6a8c8fce6d3400ddc4a7
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    script: |
+      if [ -n "${PREFETCH_INPUT}" ]; then
+        echo "Merging contents of sbom-cachi2.json into sbom-cyclonedx.json"
+        /src/utils/merge_syft_sbom.py sbom-cachi2.json sbom-cyclonedx.json > sbom-temp.json
+        mv sbom-temp.json sbom-cyclonedx.json
+      else
+        echo "Skipping step since no Cachi2 SBOM was produced"
+      fi
+    workingDir: /var/workdir
+    securityContext:
+      runAsUser: 0
+
+  - name: create-purl-sbom
+    image: registry.access.redhat.com/ubi9/python-39:1-165@sha256:4da8ddb12096a31d8d50e58ea479ba2fe2f252f215fbaf5bf90923a1827463ba
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    script: |
+      #!/bin/python3
+      import json
+
+      with open("./sbom-cyclonedx.json") as f:
+        cyclonedx_sbom = json.load(f)
+
+      purls = [{"purl": component["purl"]} for component in cyclonedx_sbom.get("components", []) if "purl" in component]
+      purl_content = {"image_contents": {"dependencies": purls}}
+
+      with open("sbom-purl.json", "w") as output_file:
+        json.dump(purl_content, output_file, indent=4)
+    workingDir: /var/workdir
+    securityContext:
+      runAsUser: 0
+
+  - name: inject-sbom-and-push
+    image: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
+    computeResources: {}
+    script: |
+      if [ -n "${PARAM_BUILDER_IMAGE}" ]; then
+        echo "WARNING: provided deprecated BUILDER_IMAGE parameter has no effect."
+      fi
+
+      base_image_name=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.name"}}' $IMAGE | cut -f1 -d'@')
+      base_image_digest=$(buildah inspect --format '{{ index .ImageAnnotations "org.opencontainers.image.base.digest"}}' $IMAGE)
+      container=$(buildah from --pull-never $IMAGE)
+      buildah copy $container sbom-cyclonedx.json sbom-purl.json /root/buildinfo/content_manifests/
+      buildah config -a org.opencontainers.image.base.name=${base_image_name} -a org.opencontainers.image.base.digest=${base_image_digest} $container
+      buildah commit $container $IMAGE
+
+      status=-1
+      max_run=5
+      sleep_sec=10
+      for run in $(seq 1 $max_run); do
+        status=0
+        [ "$run" -gt 1 ] && sleep $sleep_sec
+        echo "Pushing sbom image to registry"
+        buildah push \
+          --tls-verify=$TLSVERIFY \
+          --digestfile /var/workdir/image-digest $IMAGE \
+          docker://$IMAGE && break || status=$?
+      done
+      if [ "$status" -ne 0 ]; then
+          echo "Failed to push sbom image to registry after ${max_run} tries"
+          exit 1
+      fi
+
+      cat /var/workdir/image-digest | tee $(results.IMAGE_DIGEST.path)
+      echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
+
+    securityContext:
+      runAsUser: 0
+      capabilities:
+        add:
+          - SETFCAP
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+    workingDir: /var/workdir
+
+  - name: upload-sbom
+    image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+    args:
+      - attach
+      - sbom
+      - --sbom
+      - sbom-cyclonedx.json
+      - --type
+      - cyclonedx
+      - $(params.IMAGE)
+    workingDir: /var/workdir
+
+  volumes:
+  - name: varlibcontainers
+    emptyDir: {}
+  - name: etc-pki-entitlement
+    secret:
+      secretName: $(params.ENTITLEMENT_SECRET)
+      optional: true
+  - name: workdir
+    emptyDir: {}
+  workspaces:
+  - name: source
+    description: Workspace with the trusted artifacts

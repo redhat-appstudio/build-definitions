@@ -1,0 +1,108 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.2"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: "appstudio, hacbs"
+  name: sast-snyk-check
+spec:
+  description: >-
+    Scans source code for security vulnerabilities, including common issues such as SQL injection, cross-site scripting (XSS), and code injection attacks using Snyk Code, a Static Application Security Testing (SAST) tool.
+  results:
+    - description: Tekton task test output.
+      name: TEST_OUTPUT
+  params:
+    - name: SNYK_SECRET
+      description: Name of secret which contains Snyk token.
+      default: snyk-secret
+    - name: ARGS
+      type: string
+      description: Append arguments.
+      default: "--all-projects --exclude=test*,vendor,deps"
+    - name: SOURCE_ARTIFACT
+      type: string
+      description: The produced source trusted artifact URI
+  volumes:
+    - name: snyk-secret
+      secret:
+        secretName: $(params.SNYK_SECRET)
+        optional: true
+    - name: workdir
+      emptyDir: {}
+  stepTemplate:
+    volumeMounts:
+      - mountPath: /var/workdir
+        name: workdir
+  steps:
+    - name: use-trusted-artifact
+      image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:2741aaaf0c06ab784dcab99545be615696d05a578bd4ae5a1b2d6e17e5c569c4
+      args:
+        - use
+        - --store
+        - $(workspaces.workspace.path)
+        - $(params.SOURCE_ARTIFACT)=/var/workdir/source
+      workspaces:
+        - name: workspace
+    - name: sast-snyk-check
+      image: quay.io/redhat-appstudio/hacbs-test:v1.3.0@sha256:cd4601a7d71ebd908046db7a9b7010611b8b372fe941664d5163c81250a1a1fc
+      # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+      # the cluster will set imagePullPolicy to IfNotPresent
+      # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
+      workingDir: /var/workdir/source
+      volumeMounts:
+        - name: snyk-secret
+          mountPath: "/etc/secrets"
+          readOnly: true
+      env:
+        - name: SNYK_SECRET
+          value: $(params.SNYK_SECRET)
+        - name: ARGS
+          value: $(params.ARGS)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        . /utils.sh
+        trap 'handle_error $(results.TEST_OUTPUT.path)' EXIT
+
+        SNYK_TOKEN_PATH="/etc/secrets/snyk_token"
+
+        if [ -f "${SNYK_TOKEN_PATH}" ] && [ -s "${SNYK_TOKEN_PATH}" ]; then
+          # SNYK token is provided
+          SNYK_TOKEN="$(cat ${SNYK_TOKEN_PATH})"
+          export SNYK_TOKEN
+        else
+          to_enable_snyk='[here](https://redhat-appstudio.github.io/docs.appstudio.io/Documentation/main/how-to-guides/testing_applications/enable_snyk_check_for_a_product/)'
+          note="Task $(context.task.name) skipped: If you wish to use the Snyk code SAST task, please create a secret name snyk-secret with the key "snyk_token" containing the Snyk token by following the steps given ${to_enable_snyk}"
+          TEST_OUTPUT=$(make_result_json -r SKIPPED -t "$note")
+          echo "${TEST_OUTPUT}" | tee "$(results.TEST_OUTPUT.path)"
+          exit 0
+        fi
+
+        SNYK_EXIT_CODE=0
+        SOURCE_CODE_DIR=/var/workdir/source
+        snyk code test $ARGS $SOURCE_CODE_DIR --sarif-file-output=sast_snyk_check_out.json 1>&2>> stdout.txt || SNYK_EXIT_CODE=$?
+        test_not_skipped=0
+        SKIP_MSG="We found 0 supported files"
+        grep -q "$SKIP_MSG" stdout.txt || test_not_skipped=$?
+
+        if [[ "$SNYK_EXIT_CODE" -eq 0 ]] || [[ "$SNYK_EXIT_CODE" -eq 1 ]]; then
+          cat sast_snyk_check_out.json
+          TEST_OUTPUT=
+          parse_test_output $(context.task.name) sarif sast_snyk_check_out.json  || true
+
+        # When the test is skipped, the "SNYK_EXIT_CODE" is 3 and it can also be 3 in some other situation
+        elif [[ "$test_not_skipped" -eq 0 ]]; then
+          note="Task $(context.task.name) success: Snyk code test found zero supported files."
+          ERROR_OUTPUT=$(make_result_json -r SUCCESS -t "$note")
+        else
+          echo "sast-snyk-check test failed because of the following issues:"
+          cat stdout.txt
+          note="Task $(context.task.name) failed: For details, check Tekton task log."
+          ERROR_OUTPUT=$(make_result_json -r ERROR -t "$note")
+        fi
+        echo "${TEST_OUTPUT:-${ERROR_OUTPUT}}" | tee $(results.TEST_OUTPUT.path)
+  workspaces:
+  - name: workspace
+    description: Workspace with the trusted artifacts
