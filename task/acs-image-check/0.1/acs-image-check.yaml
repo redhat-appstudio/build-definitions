@@ -53,7 +53,7 @@ spec:
         oc annotate taskrun $(context.taskRun.name) task.output.location=logs
 
     - name: rox-image-check
-      image: registry.access.redhat.com/ubi8-minimal@sha256:d8b81a38b5ad9694742ea03159d3217cd2dde3997b1ee53bbb53c33dd67be7b7
+      image: registry.access.redhat.com/ubi8-minimal@sha256:8bedbe742f140108897fb3532068e8316900d9814f399d676ac78b46e740e34e
       volumeMounts:
         - name: rox-secret
           mountPath: /rox-secret
@@ -121,7 +121,7 @@ spec:
         cp roxctl_image_check_output.json /steps-shared-folder/acs-image-check.json
 
     - name: report
-      image: registry.access.redhat.com/ubi8-minimal@sha256:d8b81a38b5ad9694742ea03159d3217cd2dde3997b1ee53bbb53c33dd67be7b7
+      image: registry.access.redhat.com/ubi8-minimal@sha256:8bedbe742f140108897fb3532068e8316900d9814f399d676ac78b46e740e34e
       volumeMounts:
         - name: shared-folder
           mountPath: /steps-shared-folder
