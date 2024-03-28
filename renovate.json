@@ -18,11 +18,12 @@
         "quay.io/redhat-appstudio/buildah",
         "quay.io/redhat-appstudio/syft",
         "quay.io/redhat-appstudio/hacbs-jvm-build-request-processor",
+        "quay.io/redhat-appstudio/build-definitions-source-image-build-utils",
         "quay.io/redhat-appstudio/cosign",
         "quay.io/redhat-appstudio/cachi2"
       ],
       "groupName": "build",
-      "reviewers": ["mmorhun", "tkdchen", "psturc", "brunoapimentel"]
+      "reviewers": ["mmorhun", "tkdchen", "rcerven", "mkosiarc", "brunoapimentel", "chmeliik"]
     },
     {
       "matchPackagePrefixes": [
@@ -41,7 +42,14 @@
         "quay.io/redhat-appstudio/clamav-db"
       ],
       "groupName": "integration",
-      "reviewers": ["dirgim", "hongweiliu17", "jsztuka", "jinqi7", "Josh-Everett", "MartinBasti", "dheerajodha"]
+      "reviewers": ["dirgim", "hongweiliu17", "jsztuka", "Josh-Everett", "MartinBasti", "dheerajodha", "kasemAlem"]
+    },
+    {
+      "matchPackageNames": [
+        "quay.io/opdev/preflight"
+      ],
+      "groupName": "preflight",
+      "reviewers": ["skattoju"]
     },
     {
       "matchPackagePrefixes": [
