@@ -13,7 +13,7 @@ spec:
       description: Preflight pass or fail outcome.
   steps:
     - name: check-container
-      image: quay.io/opdev/preflight:stable@sha256:d990cbe8fb0db4dff0f7609403992f273f07d55f89dc7d2f046eb8f9c3e48110
+      image: quay.io/opdev/preflight:stable@sha256:add15669e17a86d807be05671f3c9834161d7af6f41bf4a50969be2da0487fbc
       args: ["check", "container", "$(params.image-url)"]
       volumeMounts:
         - name: pfltoutputdir
@@ -24,17 +24,33 @@ spec:
         - name: pfltoutputdir
           mountPath: /artifacts
       script: |
-        # Expected results directory
-        RESULT_JSON_PATH=artifacts/results.json
+        # Declare Supported architectures
+        declare -a SUPPORTED_ARCHES=("amd64", "arm64", "ppc64le", "s390x")
 
-        # Process results
+        # Initialize result vars
+        PFLT_PASS_COUNT=0
+        PFLT_FAIL_COUNT=0
+        PFLT_ERROR_COUNT=0
         PFLT_RESULT="FAILURE"
-        PFLT_PASSED=$(cat $RESULT_JSON_PATH |jq .passed)
-        if [ $PFLT_PASSED = true ]; then PFLT_RESULT="SUCCESS" ; fi
         PFLT_NOTE="Task prelifght is a ${PFLT_RESULT}: Refer to Tekton task logs for more information"
-        PFLT_PASS_COUNT=$(cat $RESULT_JSON_PATH | jq '.results.passed | length')
-        PFLT_FAIL_COUNT=$(cat $RESULT_JSON_PATH | jq '.results.failed |length')
-        PFLT_ERROR_COUNT=$(cat $RESULT_JSON_PATH | jq '.results.errors |length')
+
+        # Loop over SUPPORTED_ARCHES and process results
+        for ARCH in "${SUPPORTED_ARCHES[@]}"
+        do
+            # Check if results directory exits
+            RESULT_JSON_PATH=artifacts/${ARCH}/results.json
+            if ! [ -f $RESULT_JSON_PATH ]; then
+                continue
+            fi
+            # Process results
+            PFLT_PASSED=$(cat $RESULT_JSON_PATH |jq .passed)
+            if [ $PFLT_PASSED = true ]; then PFLT_RESULT="SUCCESS" ; fi
+            PFLT_NOTE="Task prelifght is a ${PFLT_RESULT} : Refer to Tekton task logs for more information"
+            PFLT_PASS_COUNT=`expr $PFLT_PASS_COUNT + $(cat $RESULT_JSON_PATH | jq '.results.passed | length')`
+            PFLT_FAIL_COUNT=`expr $PFLT_FAIL_COUNT + $(cat $RESULT_JSON_PATH | jq '.results.failed | length')`
+            PFLT_ERROR_COUNT=`expr $PFLT_ERROR_COUNT + $(cat $RESULT_JSON_PATH | jq '.results.errors | length')`
+        done
+
         if [[ $PFLT_ERROR_COUNT > 0 ]]; then PFLT_RESULT="ERROR" ; fi
 
         # Generate TEST_OUTPUT
