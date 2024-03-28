@@ -48,7 +48,7 @@ spec:
           --workdir "${WORKDIR}" \
           --status-path "${WORKDIR}"/status
     - name: output-results
-      image: quay.io/redhat-appstudio/hacbs-test:v1.1.8@sha256:8de0ec0875c7c6a41e0208b0030090992169f501166154edaded8a4f6121b164
+      image: quay.io/redhat-appstudio/hacbs-test:v1.3.4@sha256:b909fe6111e04169742e23a5e515aa549aa8c09ce0348f4560ae83d3c174a15a
       volumeMounts:
         - name: workdir
           mountPath: "$(params.WORKDIR)"

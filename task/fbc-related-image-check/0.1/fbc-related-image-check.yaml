@@ -17,7 +17,7 @@ spec:
     - name: workspace
   steps:
     - name: check-related-images
-      image: quay.io/redhat-appstudio/hacbs-test:v1.3.0@sha256:cd4601a7d71ebd908046db7a9b7010611b8b372fe941664d5163c81250a1a1fc
+      image: quay.io/redhat-appstudio/hacbs-test:v1.3.4@sha256:b909fe6111e04169742e23a5e515aa549aa8c09ce0348f4560ae83d3c174a15a
       # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
       # the cluster will set imagePullPolicy to IfNotPresent
       # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
