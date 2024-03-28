@@ -95,6 +95,7 @@ spec:
           echo "rox API endpoint is not set, demo will exit with success"
           echo "TODO: configure the pipeline with your ACS server domain. Set your ACS endpoint under 'rox-api-endpoint' key in the secret specified in rox-secret-name parameter. For example: 'rox.stackrox.io:443'"
           set_test_output_result SKIPPED "Task $(context.task.name) skipped: ACS API enpoint not specified"
+          touch $(results.SCAN_OUTPUT.path)
           exit 0
         fi
 
@@ -105,6 +106,7 @@ spec:
           echo "rox API token is not set, demo will exit with success"
           echo "TODO: configure the pipeline to have access to ROXCTL. Set you ACS token under 'rox-api-token' key in the secret specified in rox-secret-name parameter."
           set_test_output_result SKIPPED "Task $(context.task.name) skipped: ACS API token not provided"
+          touch $(results.SCAN_OUTPUT.path)
           exit 0
         fi
 
@@ -166,4 +168,6 @@ spec:
           mountPath: /steps-shared-folder
       script: |
         #!/usr/bin/env bash
-        cat /steps-shared-folder/acs-image-scan.json
+        if [ -f /steps-shared-folder/acs-image-scan.json ]; then
+          cat /steps-shared-folder/acs-image-scan.json
+        fi

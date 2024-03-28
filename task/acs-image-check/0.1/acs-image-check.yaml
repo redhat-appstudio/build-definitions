@@ -127,4 +127,6 @@ spec:
           mountPath: /steps-shared-folder
       script: |
         #!/usr/bin/env bash
-        cat /steps-shared-folder/acs-image-check.json
+        if [ -f  /steps-shared-folder/acs-image-check.json ]; then
+          cat /steps-shared-folder/acs-image-check.json
+        fi

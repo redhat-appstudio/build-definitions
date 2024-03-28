@@ -130,4 +130,6 @@ spec:
           mountPath: /workspace/repository
       script: |
         #!/usr/bin/env bash
-        cat /workspace/repository/acs-deploy-check.json
+        if [ -f /workspace/repository/acs-deploy-check.json ]; then
+          cat /workspace/repository/acs-deploy-check.json
+        fi
