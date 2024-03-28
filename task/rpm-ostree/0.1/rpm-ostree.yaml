@@ -59,6 +59,8 @@ spec:
     name: IMAGE_URL
   - description: Digests of the base images used for build
     name: BASE_IMAGES_DIGESTS
+  - name: SBOM_BLOB_URL
+    description: Reference, including digest to the SBOM blob
   stepTemplate:
     env:
     - name: CONTEXT
@@ -221,6 +223,12 @@ spec:
 
       cat "$(workspaces.source.path)"/image-digest | tee $(results.IMAGE_DIGEST.path)
       echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
+
+      # Remove tag from IMAGE while allowing registry to contain a port number.
+      sbom_repo="${IMAGE%:*}"
+      sbom_digest="$(sha256sum sbom-cyclonedx.json | cut -d' ' -f1)"
+      # The SBOM_BLOB_URL is created by `cosign attach sbom`.
+      echo -n "${sbom_repo}@sha256:${sbom_digest}" | tee $(results.SBOM_BLOB_URL.path)
     securityContext:
       capabilities:
         add:
