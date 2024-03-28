@@ -36,7 +36,7 @@ spec:
       emptyDir: {}
   steps:
     - name: build
-      image: quay.io/redhat-appstudio/build-definitions-source-image-build-utils@sha256:e5865a663af8faa4816802b449e3f9988db00dc93918f55397fea7139e03a6a9
+      image: quay.io/redhat-appstudio/build-definitions-source-image-build-utils@sha256:a07cc2cf1150461becae8c2152c1f62ff8952335aff69b1b76bbae47d0edd42d
       # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
       # the cluster will set imagePullPolicy to IfNotPresent
       # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
