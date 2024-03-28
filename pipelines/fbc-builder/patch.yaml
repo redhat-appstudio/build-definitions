@@ -28,6 +28,35 @@
     value: "$(params.image-expires-after)"
   - name: COMMIT_SHA
     value: "$(tasks.clone-repository.results.commit)"
+# Remove tasks
+# Example - yq .spec.tasks.[].name ../build-definitions/pipelines/template-build/template-build.yaml | nl -v 0
+# to compute offsets
+#      0  init
+#      1  clone-repository
+#      2  prefetch-dependencies
+#      3  build-container
+#      4  build-source-image
+#      5  deprecated-base-image-check
+#      6  clair-scan
+#      7  ecosystem-cert-preflight-checks
+#      8  sast-snyk-check
+#      9  clamav-scan
+#      10 sbom-json-check
+- op: replace
+  path: /spec/tasks/3/runAfter/0
+  value: clone-repository
+- op: remove
+  path: /spec/tasks/9  # clamav-scan
+- op: remove
+  path: /spec/tasks/8  # sast-snyk-check
+- op: remove
+  path: /spec/tasks/7  # ecosystem-cert-preflight-checks
+- op: remove
+  path: /spec/tasks/6  # clair-scan
+- op: remove
+  path: /spec/tasks/4  # build-source-image
+- op: remove
+  path: /spec/tasks/2  # prefetch-dependencies
 - op: add
   path: /spec/tasks/-
   value:
@@ -88,6 +117,3 @@
     workspaces:
       - name: workspace
         workspace: workspace
-# - op: remove
-#   # build-source-image as source images are not needed for FBC components
-#   path: /spec/tasks/4
