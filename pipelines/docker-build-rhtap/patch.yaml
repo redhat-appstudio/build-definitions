@@ -17,6 +17,13 @@
 - op: add
   path: /spec/params/-
   value:
+    name: gitops-auth-secret-name
+    type: string
+    default: gitops-auth-secret
+    description: "Secret name to enable this pipeline to update the gitops repo with the new image. "
+- op: add
+  path: /spec/params/-
+  value:
     name: event-type
     type: string
     default: "push"
@@ -141,6 +148,8 @@
         value: $(params.git-url)-gitops
       - name: image
         value: $(tasks.build-container.results.IMAGE_URL)@$(tasks.build-container.results.IMAGE_DIGEST)
+      - name: gitops-auth-secret-name
+        value: $(params.gitops-auth-secret-name)
     runAfter:
       - build-container
     when:
