@@ -1,0 +1,119 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1"
+    build.appstudio.redhat.com/build_type: "helm"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: "image-build, appstudio, hacbs"
+  name: helm
+spec:
+  description: |-
+    Build and push a helm chart
+  params:
+  - description: Reference of the image helm will produce.
+    name: IMAGE
+    type: string
+  - default: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
+    description: The location of the buildah builder image.
+    name: BUILDER_IMAGE
+    type: string
+  - default: ""
+    description: Name to the helm chart to build.
+    name: CHART_NAME
+    type: string
+  - default: ./charts
+    description: Path to the directory to use as context.
+    name: CONTEXT
+    type: string
+  - default: "true"
+    description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+    name: TLSVERIFY
+    type: string
+  - default: ""
+    description: Delete image tag after specified time. Empty means to keep the image tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
+    name: IMAGE_EXPIRES_AFTER
+    type: string
+  - name: COMMIT_SHA
+    description: The image is built from this commit.
+    type: string
+    default: ""
+  results:
+  - description: Digest of the image just built
+    name: IMAGE_DIGEST
+  - description: Image repository where the built image was pushed
+    name: IMAGE_URL
+  stepTemplate:
+    env:
+    - name: BUILDAH_FORMAT
+      value: oci
+    - name: STORAGE_DRIVER
+      value: vfs
+    - name: CONTEXT
+      value: $(params.CONTEXT)
+    - name: CHART_NAME
+      value: $(params.CHART_NAME)
+    - name: IMAGE
+      value: $(params.IMAGE)
+    - name: TLSVERIFY
+      value: $(params.TLSVERIFY)
+    - name: IMAGE_EXPIRES_AFTER
+      value: $(params.IMAGE_EXPIRES_AFTER)
+  steps:
+  - image: $(params.BUILDER_IMAGE)
+    name: build
+    computeResources:
+      limits:
+        memory: 4Gi
+        cpu: 2
+      requests:
+        memory: 512Mi
+        cpu: 250m
+    env:
+    - name: COMMIT_SHA
+      value: $(params.COMMIT_SHA)
+    script: |
+      # TODO: don't do this
+      export VERIFY_CHECKSUM=false
+      curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      curl -fsSL -o yq https://github.com/mikefarah/yq/releases/download/v4.40.1/yq_linux_amd64
+      chmod 700 ./yq
+      curl -fsSL -o jq https://github.com/jqlang/jq/releases/download/jq-1.7/jq-linux-amd64
+      chmod 700 ./jq
+
+      SOURCE_CODE_DIR=source
+      CONTEXT_DIR="$SOURCE_CODE_DIR/$CONTEXT"
+      CHART_PATH="$CONTEXT_DIR/$CHART_NAME"
+      CHART_VERSION="$(cat $CHART_PATH/Chart.yaml | ./yq '.version')"
+      IMAGE_NAME="$(echo $IMAGE | awk -F: '{print $1}')"
+      IMAGE_NAMESPACE="${IMAGE_NAME%/*}"
+
+      # TODO: This will always push with the same version. This needs to be extended to change the version for PRs
+      #       and to add additional tags to the push images to prevent stomping
+      helm package $CHART_PATH -d $CONTEXT_DIR --version $CHART_VERSION
+      cat ~/.docker/config.json | ./jq --arg registry $IMAGE_NAME '.auths[$registry]' | ./jq -n --arg registry $IMAGE_NAME '{auths:{($registry):inputs}}' > scoped_authfile.json
+      helm push $CHART_PATH-$CHART_VERSION.tgz oci://$IMAGE_NAMESPACE --registry-config ./scoped_authfile.json 2> push.out
+      cat push.out
+      IMAGE_PATH=$(sed -n '1p' push.out | awk '{print $2}')
+      IMAGE_DIGEST=$(sed -n '2p' push.out | awk '{print $2}')
+
+      echo -n "$IMAGE_PATH" | tee $(results.IMAGE_URL.path)
+      echo -n "$IMAGE_DIGEST" | tee $(results.IMAGE_DIGEST.path)
+
+
+    securityContext:
+      capabilities:
+        add:
+          - SETFCAP
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+    workingDir: $(workspaces.source.path)
+
+  volumes:
+  - emptyDir: {}
+    name: varlibcontainers
+  workspaces:
+  - name: source
+    description: Workspace containing the source code to build.
