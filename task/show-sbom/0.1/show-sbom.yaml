@@ -15,30 +15,57 @@ spec:
     - name: IMAGE_URL
       description: Fully qualified image name to show SBOM for.
       type: string
+    - name: PLATFORM
+      description: Specific architecture to display the SBOM for. An example arch would be "linux/amd64". If IMAGE_URL
+        refers to a multi-arch image and this parameter is empty, the task will default to use "linux/amd64".
+      type: string
+      default: "linux/amd64"
   steps:
   - name: show-sbom
-    image: quay.io/redhat-appstudio/cosign:v2.1.1@sha256:c883d6f8d39148f2cea71bff4622d196d89df3e510f36c140c097b932f0dd5d5
+    image: quay.io/redhat-appstudio/appstudio-utils:3e548a38b3ad183262a25bc2a4eb6b5367b83fb5
     # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
     # the cluster will set imagePullPolicy to IfNotPresent
     # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
     env:
     - name: IMAGE_URL
       value: $(params.IMAGE_URL)
+    - name: PLATFORM
+      value: $(params.PLATFORM)
     script: |
-      #!/busybox/sh
-      status=-1
-      max_try=5
-      wait_sec=2
-      for run in $(seq 1 $max_try); do
-        status=0
-        cosign download sbom $IMAGE_URL 2>>err
-        status=$?
-        if [ "$status" -eq 0 ]; then
-          break
-        fi
-        sleep $wait_sec
-      done
-      if [ "$status" -ne 0 ]; then
+      #!/bin/bash
+
+      download_sbom_with_retry() {
+        status=-1
+        max_try=5
+        wait_sec=2
+
+        PLATFORM_ARG="$1"
+        for run in $(seq 1 $max_try); do
+          status=0
+          cosign download sbom $PLATFORM_ARG $IMAGE_URL 2>>err
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            break
+          fi
+          sleep $wait_sec
+        done
+        if [ "$status" -ne 0 ]; then
           echo "Failed to get SBOM after ${max_try} tries" >&2
           cat err >&2
+        fi
+      }
+
+      RAW_OUTPUT=$(skopeo inspect --no-tags --raw docker://${IMAGE_URL})
+      if [ $(jq -r '.mediaType' <<< $RAW_OUTPUT) == "application/vnd.oci.image.manifest.v1+json" ] ; then
+        ARCHES=""
+      else
+        # Multi arch
+        ARCHES=$(jq -r '.manifests[].platform.architecture' <<< $RAW_OUTPUT)
+      fi
+
+      if [ -z "${ARCHES}" ] ; then
+        # single arch image
+        download_sbom_with_retry ""
+      else
+        download_sbom_with_retry " --platform=$PLATFORM "
       fi
