@@ -27,7 +27,9 @@ spec:
         "--ginkgo.timeout=2h"
       ]
       securityContext:
-        runAsUser: 1000
+        capabilities:
+          add:
+          - SETFCAP
       env:
       - name: APP_SUFFIX
         value: "$(params.app_suffix)"
