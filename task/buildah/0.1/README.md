@@ -2,7 +2,7 @@
 
 Buildah task builds source code into a container image and pushes the image into container registry using buildah tool.
 In addition it generates a SBOM file, injects the SBOM file into final container image and pushes the SBOM file as separate image using cosign tool.
-When [Java dependency rebuild](https://redhat-appstudio.github.io/docs.stonesoup.io/Documentation/main/cli/proc_enabled_java_dependencies.html) is enabled it triggers rebuilds of Java artifacts.
+When [Java dependency rebuild](https://redhat-appstudio.github.io/docs.appstudio.io/Documentation/main/how-to-guides/Secure-your-supply-chain/proc_java_dependencies) is enabled it triggers rebuilds of Java artifacts.
 When prefetch-dependencies task was activated it is using its artifacts to run build in hermetic environment.
 
 ## Parameters
