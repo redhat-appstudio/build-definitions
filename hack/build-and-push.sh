@@ -7,6 +7,26 @@ QUAY_ORG=redhat-appstudio-tekton-catalog
 SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 WORKDIR=$(mktemp -d --suffix "-$(basename "${BASH_SOURCE[0]}" .sh)")
 
+tkn_bundle_push() {
+    local status
+    local retry=0
+    local -r interval=${RETRY_INTERVAL:-5}
+    local -r max_retries=5
+    while true; do
+        tkn bundle push "$@"
+        status=$?
+        if [ $status == 0 ]; then
+            break
+        fi
+        ((retry+=1))
+        if [ $retry -gt $max_retries ]; then
+            return $status
+        fi
+        echo "Waiting for a while, then retry the tkn bundle push ..."
+        sleep "$interval"
+    done
+}
+
 # Helper function to record the image reference from the output of
 # the "tkn bundle push" command into a given file.
 # Params:
@@ -98,7 +118,7 @@ do
     task_bundle=quay.io/$MY_QUAY_USER/${repository}:${tag}
     digest=$(curl -s https://quay.io/api/v1/repository/$MY_QUAY_USER/$repository/tag/?specificTag=${tag}-${task_file_sha} | yq '.tags[0].manifest_digest')
     if [ "$digest" == "null" ]; then
-      output=$(tkn bundle push -f "$prepared_task_file" "$task_bundle" | save_ref "$task_bundle" "$OUTPUT_TASK_BUNDLE_LIST")
+      output=$(tkn_bundle_push -f "$prepared_task_file" "$task_bundle" | save_ref "$task_bundle" "$OUTPUT_TASK_BUNDLE_LIST")
       echo "$output"
       task_bundle_with_digest="${output##*$'\n'}"
 
@@ -147,7 +167,7 @@ do
     tag=${TEST_REPO_NAME:+${pipeline_name}-}$BUILD_TAG
     pipeline_bundle=quay.io/${MY_QUAY_USER}/${repository}:${tag}
 
-    tkn bundle push "$pipeline_bundle" -f "${pipeline_yaml}" | \
+    tkn_bundle_push "$pipeline_bundle" -f "${pipeline_yaml}" | \
         save_ref "$pipeline_bundle" "$OUTPUT_PIPELINE_BUNDLE_LIST"
 
     [ "$pipeline_name" == "docker-build" ] && docker_pipeline_bundle=$pipeline_bundle
