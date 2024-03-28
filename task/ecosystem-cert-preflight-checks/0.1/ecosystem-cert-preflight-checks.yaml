@@ -13,7 +13,7 @@ spec:
       description: Preflight pass or fail outcome.
   steps:
     - name: check-container
-      image: quay.io/opdev/preflight:stable@sha256:d990cbe8fb0db4dff0f7609403992f273f07d55f89dc7d2f046eb8f9c3e48110
+      image: quay.io/opdev/preflight:stable@sha256:add15669e17a86d807be05671f3c9834161d7af6f41bf4a50969be2da0487fbc
       args: ["check", "container", "$(params.image-url)"]
       volumeMounts:
         - name: pfltoutputdir
