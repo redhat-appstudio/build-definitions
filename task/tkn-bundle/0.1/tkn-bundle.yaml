@@ -39,7 +39,7 @@ spec:
     - name: TASK_FILE
       value: tekton_task_files
   steps:
-  - image: quay.io/redhat-appstudio/hacbs-test:latest@sha256:cd4601a7d71ebd908046db7a9b7010611b8b372fe941664d5163c81250a1a1fc
+  - image: quay.io/redhat-appstudio/hacbs-test:latest@sha256:b909fe6111e04169742e23a5e515aa549aa8c09ce0348f4560ae83d3c174a15a
     name: modify-task-files
     env:
     - name: CONTEXT
