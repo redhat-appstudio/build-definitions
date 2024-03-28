@@ -51,7 +51,7 @@ spec:
       value: $(params.TLSVERIFY)
   steps:
   - name: build
-    image: registry.access.redhat.com/ubi9/buildah@sha256:d28590e6ff9933a50be664e95a99ed9c85e0d50101ddc7f8f7cfc9ceea57fe30
+    image: registry.access.redhat.com/ubi9/buildah@sha256:3b11aae36f6c762e01731952ee6fb8e89c41660ce410e4c30d0bfc6496bca93c
     script: |
       # Check if the Dockerfile exists
       SOURCE_CODE_DIR=source
@@ -111,7 +111,7 @@ spec:
       name: tmpfiles
 
   - name: merge-sboms
-    image: registry.access.redhat.com/ubi8/python-311@sha256:8ded4b6d8087706b6819ddda5d31f22b80e5aa4efa772e94d750699ccfbf98eb
+    image: registry.access.redhat.com/ubi8/python-311@sha256:752141e2eddb0b2a25dd6de29a9817108a1e2cc501cd01809e653485246f4d20
     env:
       - name: RESULT_PATH
         value: $(results.SBOM_BLOB_URL.path)

@@ -113,7 +113,7 @@ spec:
       container=$(buildah from --pull-never $IMAGE)
       buildah mount $container | tee /workspace/container_path
       echo $container > /workspace/container_name
-    image: registry.access.redhat.com/ubi9/buildah:9.1.0-5@sha256:30eac1803d669d58c033838076a946156e49018e0d4f066d94896f0cc32030af
+    image: registry.access.redhat.com/ubi9/buildah:9.3-12@sha256:3b11aae36f6c762e01731952ee6fb8e89c41660ce410e4c30d0bfc6496bca93c
     name: build
     env:
     - name: COMMIT_SHA
@@ -150,7 +150,7 @@ spec:
     volumeMounts:
     - mountPath: /var/lib/containers
       name: varlibcontainers
-  - image: registry.access.redhat.com/ubi9/python-39:1-165@sha256:4da8ddb12096a31d8d50e58ea479ba2fe2f252f215fbaf5bf90923a1827463ba
+  - image: registry.access.redhat.com/ubi9/python-39:1-172@sha256:195c51368e83a798b6f79c6a5d877685fdf5297a81e5211cfca747a7fca725aa
     # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
     # the cluster will set imagePullPolicy to IfNotPresent
     # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.
@@ -197,7 +197,7 @@ spec:
     securityContext:
       runAsUser: 0
 
-  - image: registry.access.redhat.com/ubi9/buildah:9.1.0-5@sha256:30eac1803d669d58c033838076a946156e49018e0d4f066d94896f0cc32030af
+  - image: registry.access.redhat.com/ubi9/buildah:9.3-12@sha256:3b11aae36f6c762e01731952ee6fb8e89c41660ce410e4c30d0bfc6496bca93c
     name: inject-sbom-and-push
     computeResources: {}
     script: |

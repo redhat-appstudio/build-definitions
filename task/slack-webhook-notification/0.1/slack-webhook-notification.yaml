@@ -27,7 +27,7 @@ spec:
         optional: true
   steps:
     - name: send-message
-      image: registry.access.redhat.com/ubi9/ubi-minimal:9.3-1552@sha256:06d06f15f7b641a78f2512c8817cbecaa1bf549488e273f5ac27ff1654ed33f0
+      image: registry.access.redhat.com/ubi9/ubi-minimal:9.3-1612@sha256:119ac25920c8bb50c8b5fd75dcbca369bf7d1f702b82f3d39663307890f0bf26
       # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
       # the cluster will set imagePullPolicy to IfNotPresent
       # also per direction from Ralph Bean, we want to use image digest based tags to use a cue to automation like dependabot or renovatebot to periodially submit pull requests that update the digest as new images are released.

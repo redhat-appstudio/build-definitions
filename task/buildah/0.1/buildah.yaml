@@ -284,7 +284,7 @@ spec:
       runAsUser: 0
 
   - name: merge-syft-sboms
-    image: registry.access.redhat.com/ubi9/python-39:1-165@sha256:4da8ddb12096a31d8d50e58ea479ba2fe2f252f215fbaf5bf90923a1827463ba
+    image: registry.access.redhat.com/ubi9/python-39:1-172@sha256:195c51368e83a798b6f79c6a5d877685fdf5297a81e5211cfca747a7fca725aa
     script: |
       #!/bin/python3
       import json
@@ -333,7 +333,7 @@ spec:
       runAsUser: 0
 
   - name: create-purl-sbom
-    image: registry.access.redhat.com/ubi9/python-39:1-165@sha256:4da8ddb12096a31d8d50e58ea479ba2fe2f252f215fbaf5bf90923a1827463ba
+    image: registry.access.redhat.com/ubi9/python-39:1-172@sha256:195c51368e83a798b6f79c6a5d877685fdf5297a81e5211cfca747a7fca725aa
     script: |
       #!/bin/python3
       import json
