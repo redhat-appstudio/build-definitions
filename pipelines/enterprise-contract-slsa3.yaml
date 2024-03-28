@@ -65,7 +65,7 @@ spec:
         resolver: bundles
         params:
           - name: bundle
-            value: quay.io/enterprise-contract/ec-task-bundle:snapshot@sha256:dafce7ea773fb1f9541fbe71d147c9105c8aee6c7ab24aa51f14d51052bf511a
+            value: quay.io/enterprise-contract/ec-task-bundle:snapshot@sha256:30aea26174cc84081dbdedd64055b8ff577992f65abac1c8d4ad4cde8f134561
           - name: name
             value: verify-enterprise-contract
           - name: kind
