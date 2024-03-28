@@ -96,8 +96,10 @@ do
     repository=${TEST_REPO_NAME:-task-${task_name}}
     tag=${TEST_REPO_NAME:+${task_name}-}${task_version}
     task_bundle=quay.io/$MY_QUAY_USER/${repository}:${tag}
-    digest=$(curl -s https://quay.io/api/v1/repository/$MY_QUAY_USER/$repository/tag/?specificTag=${tag}-${task_file_sha} | yq '.tags[0].manifest_digest')
-    if [ "$digest" == "null" ]; then
+
+    if digest=$(skopeo inspect --no-tags --format='{{.Digest}}' docker://"${task_bundle}-${task_file_sha}" 2>/dev/null); then
+      task_bundle_with_digest=${task_bundle}@${digest}
+    else
       output=$(tkn bundle push -f "$prepared_task_file" "$task_bundle" | save_ref "$task_bundle" "$OUTPUT_TASK_BUNDLE_LIST")
       echo "$output"
       task_bundle_with_digest="${output##*$'\n'}"
@@ -105,8 +107,6 @@ do
       # copy task to new tag pointing to commit where the file was changed lastly, so that image persists
       # even when original tag is updated
       skopeo copy "docker://${task_bundle}" "docker://${task_bundle}-${task_file_sha}"
-    else
-      task_bundle_with_digest=${task_bundle}@${digest}
     fi
     # version placeholder is removed naturally by the substitution.
     real_task_name=$(yq e '.metadata.name' "$prepared_task_file")
