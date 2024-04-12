@@ -266,14 +266,23 @@ spec:
       name: etc-pki-entitlement
     workingDir: $(workspaces.source.path)
 
+  - image: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
+    name: remove-symlinks
+    script: |
+      # Delete symlinks - they may point outside the container rootfs, messing with SBOM scanners.
+      # Has to be done in a separate step due to buildah-remote limitations.
+      find $(cat /workspace/container_path) -xtype l -delete
+    volumeMounts:
+    - mountPath: /var/lib/containers
+      name: varlibcontainers
+
   - name: sbom-syft-generate
-    image: quay.io/redhat-appstudio/syft:v0.105.0@sha256:32a9d2007f2b042ceec4ef32fa1d90b8d28141822e7d9748f240da9d55c56601
+    image: registry.redhat.io/rh-syft-tech-preview/syft-rhel9:1.0.1@sha256:27c268d678103a27b6964c2cd5169040941b7304d0078f9727789ffb8ffba370
     # Respect Syft configuration if the user has it in the root of their repository
     # (need to set the workdir, see https://github.com/anchore/syft/issues/2465)
     workingDir: $(workspaces.source.path)/source
     script: |
       syft dir:$(workspaces.source.path)/source --output cyclonedx-json=$(workspaces.source.path)/sbom-source.json
-      find $(cat /workspace/container_path) -xtype l -delete
       syft dir:$(cat /workspace/container_path) --output cyclonedx-json=$(workspaces.source.path)/sbom-image.json
     volumeMounts:
     - mountPath: /var/lib/containers
