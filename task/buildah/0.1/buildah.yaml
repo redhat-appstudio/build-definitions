@@ -47,6 +47,10 @@ spec:
     name: PREFETCH_INPUT
     type: string
   - default: ""
+    description: In case it is not empty, the prefetch modifications to the containerfile will be applied to the source repository with a git commit
+    name: PREFETCH_COMMIT
+    type: string
+  - default: ""
     description: Delete image tag after specified time. Empty means to keep the image tag. Time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
     name: IMAGE_EXPIRES_AFTER
     type: string
@@ -98,6 +102,8 @@ spec:
       value: $(params.HERMETIC)
     - name: PREFETCH_INPUT
       value: $(params.PREFETCH_INPUT)
+    - name: PREFETCH_COMMIT
+      value: $(params.PREFETCH_COMMIT)
     - name: CONTEXT
       value: $(params.CONTEXT)
     - name: DOCKERFILE
@@ -202,6 +208,10 @@ spec:
         chmod -R go+rwX /tmp/cachi2
         VOLUME_MOUNTS="--volume /tmp/cachi2:/cachi2"
         sed -i 's|^\s*run |RUN . /cachi2/cachi2.env \&\& \\\n    |i' "$dockerfile_path"
+        if [ -n "${PREFETCH_COMMIT}" ]; then
+          git add "$dockerfile_path"
+          git commit -m "RHTAP: inject cachi2 environment"
+        fi
         echo "Prefetched content will be made available"
 
         prefetched_repo_for_my_arch="/tmp/cachi2/output/deps/rpm/$(uname -m)/repos.d/cachi2.repo"
