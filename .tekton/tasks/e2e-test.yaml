@@ -22,12 +22,13 @@ spec:
       type: string
   steps:
     - name: e2e-test
-      image: quay.io/redhat-appstudio/e2e-tests:f460221278f5bb897687cb54c4a2b891047be6f6
+      image: quay.io/susdas/e2e:next
       # a la infra-deployment updates, when PRs merge in e2e-tests, PRs will be opened
       # against build-definitions to update this tag
       args: [
         "--ginkgo.label-filter=build-templates-e2e",
         "--ginkgo.no-color",
+        "--ginkgo.v",
         "--ginkgo.timeout=2h"
       ]
       securityContext:
