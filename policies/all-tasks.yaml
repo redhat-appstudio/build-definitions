@@ -13,5 +13,6 @@ sources:
       exclude:
         # https://issues.redhat.com/browse/KFLUXBUGS-1111
         - step_image_registries.step_images_permitted:generate-odcs-compose/noversion
+        - step_image_registries.step_images_permitted:source-build/0.1
         # https://issues.redhat.com/browse/KFLUXBUGS-1110
         - step_image_registries.step_images_permitted:verify-signed-rpms/noversion
