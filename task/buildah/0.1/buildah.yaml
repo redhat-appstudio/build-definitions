@@ -79,6 +79,10 @@ spec:
     description: Path to a file with build arguments, see https://www.mankier.com/1/buildah-build#--build-arg-file
     type: string
     default: ""
+  - name: SKIP_UNUSED_STAGES
+    description: Whether to skip stages in Containerfile that seem unused by subsequent stages
+    type: string
+    default: "true"
 
   results:
   - description: Digest of the image just built
@@ -124,6 +128,8 @@ spec:
       value: $(params.ENTITLEMENT_SECRET)
     - name: BUILD_ARGS_FILE
       value: $(params.BUILD_ARGS_FILE)
+    - name: SKIP_UNUSED_STAGES
+      value: $(params.SKIP_UNUSED_STAGES)
 
   steps:
   - image: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
@@ -204,6 +210,10 @@ spec:
       for build_arg in "$@"; do
         BUILDAH_ARGS+=("--build-arg=$build_arg")
       done
+
+      if [ "${SKIP_UNUSED_STAGES}" != "true" ] ; then
+        BUILDAH_ARGS+=("--skip-unused-stages=false")
+      fi
 
       if [ -d "$(workspaces.source.path)/cachi2" ]; then
         cp -r "$(workspaces.source.path)/cachi2" /tmp/

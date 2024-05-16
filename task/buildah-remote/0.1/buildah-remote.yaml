@@ -86,6 +86,11 @@ spec:
     description: Path to a file with build arguments, see https://www.mankier.com/1/buildah-build#--build-arg-file
     name: BUILD_ARGS_FILE
     type: string
+  - default: "true"
+    description: Whether to skip stages in Containerfile that seem unused by subsequent
+      stages
+    name: SKIP_UNUSED_STAGES
+    type: string
   - description: The platform to build on
     name: PLATFORM
     type: string
@@ -135,6 +140,8 @@ spec:
       value: $(params.ENTITLEMENT_SECRET)
     - name: BUILD_ARGS_FILE
       value: $(params.BUILD_ARGS_FILE)
+    - name: SKIP_UNUSED_STAGES
+      value: $(params.SKIP_UNUSED_STAGES)
     - name: BUILDER_IMAGE
       value: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
   steps:
@@ -252,6 +259,10 @@ spec:
         BUILDAH_ARGS+=("--build-arg=$build_arg")
       done
 
+      if [ "${SKIP_UNUSED_STAGES}" != "true" ] ; then
+        BUILDAH_ARGS+=("--skip-unused-stages=false")
+      fi
+
       if [ -d "$(workspaces.source.path)/cachi2" ]; then
         cp -r "$(workspaces.source.path)/cachi2" /tmp/
         chmod -R go+rwX /tmp/cachi2
@@ -342,6 +353,7 @@ spec:
        -e PARAM_BUILDER_IMAGE="$PARAM_BUILDER_IMAGE" \
        -e ENTITLEMENT_SECRET="$ENTITLEMENT_SECRET" \
        -e BUILD_ARGS_FILE="$BUILD_ARGS_FILE" \
+       -e SKIP_UNUSED_STAGES="$SKIP_UNUSED_STAGES" \
        -e COMMIT_SHA="$COMMIT_SHA" \
        -v "$BUILD_DIR/workspaces/source:$(workspaces.source.path):Z" \
        -v "$BUILD_DIR/.docker/:/root/.docker:Z" \
