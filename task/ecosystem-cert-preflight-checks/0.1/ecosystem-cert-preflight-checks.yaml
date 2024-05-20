@@ -13,7 +13,7 @@ spec:
       description: Preflight pass or fail outcome.
   steps:
     - name: check-container
-      image: quay.io/opdev/preflight:stable@sha256:add15669e17a86d807be05671f3c9834161d7af6f41bf4a50969be2da0487fbc
+      image: quay.io/opdev/preflight:stable@sha256:38696d4b6de4cc944d1b231e538a294ac276fa137c4ffca282e21d36896ae586
       args: ["check", "container", "$(params.image-url)"]
       env:
         - name: PFLT_DOCKERCONFIG
