@@ -22,7 +22,7 @@ spec:
       type: string
   steps:
     - name: e2e-test
-      image: quay.io/redhat-appstudio/e2e-tests:bf19763689bec49c3169fe1ca5e704789ea48f56
+      image: quay.io/jstuart/e2e-tests:debug
       # a la infra-deployment updates, when PRs merge in e2e-tests, PRs will be opened
       # against build-definitions to update this tag
       args: [
@@ -40,7 +40,7 @@ spec:
       - name: COMPONENT_REPO_URLS
         value: "https://github.com/redhat-appstudio-qe/devfile-sample-python-basic,https://github.com/redhat-appstudio-qe/retrodep,https://github.com/cachito-testing/pip-e2e-test,https://github.com/redhat-appstudio-qe/fbc-sample-repo,https://github.com/redhat-appstudio-qe/nodejs-no-dockerfile,https://github.com/redhat-appstudio-qe/maven-hello-world"
       - name: QUAY_E2E_ORGANIZATION
-        value: redhat-appstudio
+        value: konflux-ci
       - name: E2E_APPLICATIONS_NAMESPACE
         value: "$(params.e2e_test_namespace)"
       - name: GITHUB_TOKEN
