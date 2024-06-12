@@ -61,7 +61,7 @@ spec:
       value: $(params.BUILD_ARGS_FILE)
   steps:
   - name: build
-    image: registry.access.redhat.com/ubi9/buildah@sha256:3b11aae36f6c762e01731952ee6fb8e89c41660ce410e4c30d0bfc6496bca93c
+    image: registry.access.redhat.com/ubi9/buildah@sha256:b2704a17d310c5d97cd718c7e876d42e2771eb3c7d6e826616602e35614bdd7c
     args:
       - $(params.BUILD_ARGS[*])
     script: |

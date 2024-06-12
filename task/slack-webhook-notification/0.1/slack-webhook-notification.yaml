@@ -27,7 +27,7 @@ spec:
         optional: true
   steps:
     - name: send-message
-      image: registry.access.redhat.com/ubi9/ubi-minimal:9.3-1612@sha256:119ac25920c8bb50c8b5fd75dcbca369bf7d1f702b82f3d39663307890f0bf26
+      image: registry.access.redhat.com/ubi9/ubi-minimal:9.4-949.1714662671@sha256:cb6f20b9225031c8d704af95932c0331cfe0b229cd5b3dd805681d92a439186e
       # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
       # the cluster will set imagePullPolicy to IfNotPresent
       volumeMounts:
