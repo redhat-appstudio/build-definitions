@@ -400,7 +400,7 @@ spec:
       readOnly: true
     workingDir: $(workspaces.source.path)
   - computeResources: {}
-    image: quay.io/redhat-appstudio/syft:v0.105.1@sha256:1910b829997650c696881e5fc2fc654ddf3184c27edb1b2024e9cb2ba51ac431
+    image: quay.io/redhat-appstudio/syft:v1.2.0@sha256:f608cdf9159270124cacfb8e1b2d17fcae05dd869d1a339dd316ede8ad6e5063
     name: sbom-syft-generate
     script: |
       echo "Running syft on the source directory"
