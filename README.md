@@ -41,6 +41,24 @@ There is a container which is used to support multiple set of tasks called `quay
 
 Shellspec tests can be run by invoking `hack/test-shellspec.sh`.
 
+Go tests can be executed by running the following:
+
+```bash
+# Specify which Kubernetes namespace to be used for testing. Test TaskRuns will be executed in this
+# namespace. The tests will use whichever Kubernetes cluster you're logged into.
+export TEST_KUBE_NAMESPACE=default
+
+# Specify an OCI repo to be used by the tests. Some of the tests require pushing content to an OCI
+# repository. Make sure the ServiceAccount used for executing TaskRuns has a linked Secret with
+# access to push content to the specified OCI repo. This is described in detail at
+# https://tekton.dev/docs/pipelines/auth
+export TEST_OCI_REPO=quay.io/spam/bacon-test
+
+# -count=1 tells Go to not cache test results. Caching does not work well with the nature of the
+# tests performed in this repository.
+GOFLAGS="-count=1" go test ./...
+```
+
 ## Release
 
 Release is done by (better leave it to the [push pipeline](.tekton/push.yaml)):
