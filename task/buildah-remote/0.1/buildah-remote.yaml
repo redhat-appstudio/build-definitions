@@ -164,6 +164,7 @@ spec:
     image: quay.io/redhat-appstudio/multi-platform-runner:01c7670e81d5120347cf0ad13372742489985e5f@sha256:246adeaaba600e207131d63a7f706cffdcdc37d8f600c56187123ec62823ff44
     name: build
     script: |-
+      echo "[$( date --utc -Ins )] Start"
       set -o verbose
       mkdir -p ~/.ssh
       if [ -e "/ssh/error" ]; then
@@ -182,6 +183,7 @@ spec:
       export SSH_ARGS="-o StrictHostKeyChecking=no"
       mkdir -p scripts
       echo "$BUILD_DIR"
+      echo "[$( date --utc -Ins )] Creating dirs"
       ssh $SSH_ARGS "$SSH_HOST"  mkdir -p "$BUILD_DIR/workspaces" "$BUILD_DIR/scripts" "$BUILD_DIR/volumes"
 
       PORT_FORWARD=""
@@ -191,12 +193,15 @@ spec:
       PODMAN_PORT_FORWARD=" -e JVM_BUILD_WORKSPACE_ARTIFACT_CACHE_PORT_80_TCP_ADDR=localhost"
       fi
 
-      rsync -ra $(workspaces.source.path)/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
-      rsync -ra /shared/ "$SSH_HOST:$BUILD_DIR/volumes/shared/"
-      rsync -ra /entitlement/ "$SSH_HOST:$BUILD_DIR/volumes/etc-pki-entitlement/"
-      rsync -ra /mnt/trusted-ca/ "$SSH_HOST:$BUILD_DIR/volumes/trusted-ca/"
-      rsync -ra "$HOME/.docker/" "$SSH_HOST:$BUILD_DIR/.docker/"
-      rsync -ra "/tekton/results/" "$SSH_HOST:$BUILD_DIR/tekton-results/"
+      echo "[$( date --utc -Ins )] Syncing data to remote"
+      rsync --info=stats2 -ra $(workspaces.source.path)/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
+      rsync --info=stats2 -ra /shared/ "$SSH_HOST:$BUILD_DIR/volumes/shared/"
+      rsync --info=stats2 -ra /entitlement/ "$SSH_HOST:$BUILD_DIR/volumes/etc-pki-entitlement/"
+      rsync --info=stats2 -ra /mnt/trusted-ca/ "$SSH_HOST:$BUILD_DIR/volumes/trusted-ca/"
+      rsync --info=stats2 -ra "$HOME/.docker/" "$SSH_HOST:$BUILD_DIR/.docker/"
+      rsync --info=stats2 -ra "/tekton/results/" "$SSH_HOST:$BUILD_DIR/tekton-results/"
+
+      echo "[$( date --utc -Ins )] Writing script"
       cat >scripts/script-build.sh <<'REMOTESSHEOF'
       #!/bin/bash
       set -o verbose
@@ -348,6 +353,7 @@ spec:
       buildah push "$IMAGE" oci:rhtap-final-image
       REMOTESSHEOF
       chmod +x scripts/script-build.sh
+      echo "[$( date --utc -Ins )] Running remote build"
       rsync -ra scripts "$SSH_HOST:$BUILD_DIR"
       ssh $SSH_ARGS "$SSH_HOST" $PORT_FORWARD podman  run $PODMAN_PORT_FORWARD \
        -e BUILDAH_FORMAT="$BUILDAH_FORMAT" \
@@ -374,15 +380,23 @@ spec:
        -v "$BUILD_DIR/tekton-results/:/tekton/results:Z" \
        -v $BUILD_DIR/scripts:/script:Z \
       --user=0  --rm  "$BUILDER_IMAGE" /script/script-build.sh
+
+      echo "[$( date --utc -Ins )] Syncing data from remote"
       rsync -ra "$SSH_HOST:$BUILD_DIR/workspaces/source/" "$(workspaces.source.path)/"
       rsync -ra "$SSH_HOST:$BUILD_DIR/volumes/shared/" /shared/
       rsync -ra "$SSH_HOST:$BUILD_DIR/tekton-results/" "/tekton/results/"
+
+      echo "[$( date --utc -Ins )] Pulling image"
       buildah pull oci:rhtap-final-image
+      echo "[$( date --utc -Ins )] Listing images"
       buildah images
+      echo "[$( date --utc -Ins )] Tagging image"
       buildah tag localhost/rhtap-final-image "$IMAGE"
+      echo "[$( date --utc -Ins )] Create and mount container"
       container=$(buildah from --pull-never "$IMAGE")
       buildah mount "$container" | tee /shared/container_path
       echo $container > /shared/container_name
+      echo "[$( date --utc -Ins )] End"
     securityContext:
       capabilities:
         add:
@@ -403,11 +417,15 @@ spec:
     image: quay.io/redhat-appstudio/syft:v0.105.1@sha256:1910b829997650c696881e5fc2fc654ddf3184c27edb1b2024e9cb2ba51ac431
     name: sbom-syft-generate
     script: |
+      echo "[$( date --utc -Ins )] Running syft on the source directory"
       echo "Running syft on the source directory"
       syft dir:$(workspaces.source.path)/source --output cyclonedx-json=$(workspaces.source.path)/sbom-source.json
+      echo "[$( date --utc -Ins )] Deleting links"
       find $(cat /shared/container_path) -xtype l -delete
+      echo "[$( date --utc -Ins )] Running syft on the image filesystem"
       echo "Running syft on the image filesystem"
       syft dir:$(cat /shared/container_path) --output cyclonedx-json=$(workspaces.source.path)/sbom-image.json
+      echo "[$( date --utc -Ins )] End"
     volumeMounts:
     - mountPath: /var/lib/containers
       name: varlibcontainers
@@ -438,6 +456,9 @@ spec:
       #!/bin/python3
       import json
 
+      import datetime
+      print("[" + datetime.datetime.now(datetime.timezone.utc).isoformat() + "] Start")
+
       # load SBOMs
       with open("./sbom-image.json") as f:
         image_sbom = json.load(f)
@@ -463,6 +484,7 @@ spec:
       # write the CycloneDX unified SBOM
       with open("./sbom-cyclonedx.json", "w") as f:
         json.dump(image_sbom, f, indent=4)
+      print("[" + datetime.datetime.now(datetime.timezone.utc).isoformat() + "] End")
     securityContext:
       runAsUser: 0
     workingDir: $(workspaces.source.path)
@@ -470,6 +492,7 @@ spec:
     image: quay.io/redhat-appstudio/cachi2:0.7.0@sha256:1fc772aa3636fd0b43d62120d832e5913843e028e8cac42814b487c3a0a32bd8
     name: merge-cachi2-sbom
     script: |
+      echo "[$( date --utc -Ins )] Start"
       if [ -f "sbom-cachi2.json" ]; then
         echo "Merging contents of sbom-cachi2.json into sbom-cyclonedx.json"
         /src/utils/merge_syft_sbom.py sbom-cachi2.json sbom-cyclonedx.json > sbom-temp.json
@@ -477,6 +500,7 @@ spec:
       else
         echo "Skipping step since no Cachi2 SBOM was produced"
       fi
+      echo "[$( date --utc -Ins )] End"
     securityContext:
       runAsUser: 0
     workingDir: $(workspaces.source.path)
@@ -487,6 +511,9 @@ spec:
       #!/bin/python3
       import json
 
+      import datetime
+      print("[" + datetime.datetime.now(datetime.timezone.utc).isoformat() + "] Start")
+
       with open("./sbom-cyclonedx.json") as f:
         cyclonedx_sbom = json.load(f)
 
@@ -495,6 +522,7 @@ spec:
 
       with open("sbom-purl.json", "w") as output_file:
         json.dump(purl_content, output_file, indent=4)
+      print("[" + datetime.datetime.now(datetime.timezone.utc).isoformat() + "] End")
     securityContext:
       runAsUser: 0
     workingDir: $(workspaces.source.path)
@@ -505,7 +533,9 @@ spec:
     image: quay.io/redhat-appstudio/base-images-sbom-script@sha256:667669e3def018f9dbb8eaf8868887a40bc07842221e9a98f6787edcff021840
     name: create-base-images-sbom
     script: |
+      echo "[$( date --utc -Ins )] Start"
       python3 /app/base_images_sbom_script.py --sbom=sbom-cyclonedx.json --base-images-from-dockerfile=base_images_from_dockerfile --base-images-digests=$BASE_IMAGES_DIGESTS_PATH
+      echo "[$( date --utc -Ins )] End"
     securityContext:
       runAsUser: 0
     workingDir: $(workspaces.source.path)
@@ -513,6 +543,7 @@ spec:
     image: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
     name: inject-sbom-and-push
     script: |
+      echo "[$( date --utc -Ins )] Start"
       if [ -n "${PARAM_BUILDER_IMAGE}" ]; then
         echo "WARNING: provided deprecated BUILDER_IMAGE parameter has no effect."
       fi
@@ -543,6 +574,8 @@ spec:
 
       cat "$(workspaces.source.path)"/image-digest | tee $(results.IMAGE_DIGEST.path)
       echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
+      echo
+      echo "[$( date --utc -Ins )] End"
     securityContext:
       capabilities:
         add:
