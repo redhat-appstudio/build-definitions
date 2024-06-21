@@ -1,0 +1,122 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  labels:
+    app.kubernetes.io/version: "0.1"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: "image-build, hacbs"
+  name: prefetch-dependencies
+spec:
+  description: |-
+    Task that uses Cachi2 to prefetch build dependencies.
+    See docs at https://github.com/containerbuildsystem/cachi2#basic-usage.
+  params:
+  - description: Configures project packages that will have their dependencies prefetched.
+    name: input
+  - description: >
+      Enable in-development package managers. WARNING: the behavior may change at any time without
+      notice. Use at your own risk.
+    name: dev-package-managers
+    default: "false"
+  - description: Set cachi2 log level (debug, info, warning, error)
+    name: log-level
+    default: "info"
+  - name: caTrustConfigMapName
+    type: string
+    description: The name of the ConfigMap to read CA bundle data from.
+    default: trusted-ca
+  - name: caTrustConfigMapKey
+    type: string
+    description: The name of the key in the ConfigMap that contains the CA bundle data.
+    default: ca-bundle.crt
+  steps:
+  - image: quay.io/redhat-appstudio/cachi2:0.7.0@sha256:1fc772aa3636fd0b43d62120d832e5913843e028e8cac42814b487c3a0a32bd8
+    # per https://kubernetes.io/docs/concepts/containers/images/#imagepullpolicy-defaulting
+    # the cluster will set imagePullPolicy to IfNotPresent
+    name: prefetch-dependencies
+    env:
+    - name: INPUT
+      value: $(params.input)
+    - name: DEV_PACKAGE_MANAGERS
+      value: $(params.dev-package-managers)
+    - name: LOG_LEVEL
+      value: $(params.log-level)
+    - name: WORKSPACE_GIT_AUTH_BOUND
+      value: $(workspaces.git-basic-auth.bound)
+    - name: WORKSPACE_GIT_AUTH_PATH
+      value: $(workspaces.git-basic-auth.path)
+    volumeMounts:
+      - name: trusted-ca
+        mountPath: /mnt/trusted-ca
+        readOnly: true
+    script: |
+      if [ -z "${INPUT}" ]
+      then
+        # Confirm input was provided though it's likely the whole task would be skipped if it wasn't
+        echo "No prefetch will be performed because no input was provided for cachi2 fetch-deps"
+        exit 0
+      fi
+
+      if [ "$DEV_PACKAGE_MANAGERS" = "true" ]; then
+        dev_pacman_flag=--dev-package-managers
+      else
+        dev_pacman_flag=""
+      fi
+
+      # Copied from https://github.com/konflux-ci/build-definitions/blob/main/task/git-clone/0.1/git-clone.yaml
+      if [ "${WORKSPACE_GIT_AUTH_BOUND}" = "true" ] ; then
+        if [ -f "${WORKSPACE_GIT_AUTH_PATH}/.git-credentials" ] && [ -f "${WORKSPACE_GIT_AUTH_PATH}/.gitconfig" ]; then
+          cp "${WORKSPACE_GIT_AUTH_PATH}/.git-credentials" "${HOME}/.git-credentials"
+          cp "${WORKSPACE_GIT_AUTH_PATH}/.gitconfig" "${HOME}/.gitconfig"
+        # Compatibility with kubernetes.io/basic-auth secrets
+        elif [ -f "${WORKSPACE_GIT_AUTH_PATH}/username" ] && [ -f "${WORKSPACE_GIT_AUTH_PATH}/password" ]; then
+          HOSTNAME=$(cd "$(workspaces.source.path)/source" && git remote get-url origin | awk -F/ '{print $3}')
+          echo "https://$(cat ${WORKSPACE_GIT_AUTH_PATH}/username):$(cat ${WORKSPACE_GIT_AUTH_PATH}/password)@$HOSTNAME" > "${HOME}/.git-credentials"
+          echo -e "[credential \"https://$HOSTNAME\"]\n  helper = store" > "${HOME}/.gitconfig"
+        else
+          echo "Unknown git-basic-auth workspace format"
+          exit 1
+        fi
+        chmod 400 "${HOME}/.git-credentials"
+        chmod 400 "${HOME}/.gitconfig"
+      fi
+
+      ca_bundle=/mnt/trusted-ca/ca-bundle.crt
+      if [ -f "$ca_bundle" ]; then
+        echo "INFO: Using mounted CA bundle: $ca_bundle"
+        cp -vf $ca_bundle /etc/pki/ca-trust/source/anchors
+        update-ca-trust
+      fi
+
+      cachi2 --log-level="$LOG_LEVEL" fetch-deps \
+      $dev_pacman_flag \
+      --source=$(workspaces.source.path)/source \
+      --output=$(workspaces.source.path)/cachi2/output \
+      "${INPUT}"
+
+      cachi2 --log-level="$LOG_LEVEL" generate-env $(workspaces.source.path)/cachi2/output \
+      --format env \
+      --for-output-dir=/cachi2/output \
+      --output $(workspaces.source.path)/cachi2/cachi2.env
+
+      cachi2 --log-level="$LOG_LEVEL" inject-files $(workspaces.source.path)/cachi2/output \
+      --for-output-dir=/cachi2/output
+  workspaces:
+  - name: source
+    description: Workspace with the source code, cachi2 artifacts will be stored on the workspace as well
+  - name: git-basic-auth
+    description: |
+      A Workspace containing a .gitconfig and .git-credentials file or username and password.
+      These will be copied to the user's home before any cachi2 commands are run. Any
+      other files in this Workspace are ignored. It is strongly recommended
+      to bind a Secret to this Workspace over other volume types.
+    optional: true
+  volumes:
+    - name: trusted-ca
+      configMap:
+        name: $(params.caTrustConfigMapName)
+        items:
+          - key: $(params.caTrustConfigMapKey)
+            path: ca-bundle.crt
+        optional: true
