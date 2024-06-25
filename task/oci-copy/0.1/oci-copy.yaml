@@ -29,9 +29,6 @@ spec:
         value: $(params.OCI_COPY_FILE)
       - name: IMAGE
         value: $(params.IMAGE)
-    volumeMounts:
-      - mountPath: "/var/workdir"
-        name: workdir
   steps:
     - name: prepare
       image: quay.io/konflux-ci/yq:latest@sha256:974dea6375ee9df561ffd3baf994db2b61777a71f3bcf0050c5dca91ac9b3430
@@ -41,7 +38,7 @@ spec:
 
         oci_copy_file_path="$(pwd)/source/$OCI_COPY_FILE"
 
-        mkdir -p /var/workdir/vars/
+        mkdir -p $(workspaces.source.path)/vars/
 
         for entry in $(cat $oci_copy_file_path | yq '.artifacts[] | @json | @base64'); do
           entry=$(echo $entry | base64 -d)
@@ -50,13 +47,13 @@ spec:
           artifact_type=$(echo $entry | yq .type)
           artifact_digest=$(echo $entry | yq .sha256sum)
 
-          echo "declare OCI_SOURCE=${source}" > /var/workdir/vars/$filename
-          echo "declare OCI_FILENAME=${filename}" >> /var/workdir/vars/$filename
-          echo "declare OCI_ARTIFACT_TYPE=${artifact_type}" >> /var/workdir/vars/$filename
-          echo "declare OCI_ARTIFACT_DIGEST=${artifact_digest}" >> /var/workdir/vars/$filename
+          echo "declare OCI_SOURCE=${source}" > $(workspaces.source.path)/vars/$filename
+          echo "declare OCI_FILENAME=${filename}" >> $(workspaces.source.path)/vars/$filename
+          echo "declare OCI_ARTIFACT_TYPE=${artifact_type}" >> $(workspaces.source.path)/vars/$filename
+          echo "declare OCI_ARTIFACT_DIGEST=${artifact_digest}" >> $(workspaces.source.path)/vars/$filename
 
-          echo "Wrote /var/workdir/vars/$filename with contents:"
-          cat /var/workdir/vars/$filename
+          echo "Wrote $(workspaces.source.path)/vars/$filename with contents:"
+          cat $(workspaces.source.path)/vars/$filename
         done
       workingDir: $(workspaces.source.path)
     - name: oci-copy
@@ -75,7 +72,7 @@ spec:
         set -eu
         set -o pipefail
 
-        for varfile in /var/workdir/vars/*; do
+        for varfile in $(workspaces.source.path)/vars/*; do
           echo "Reading $varfile"
           source $varfile
 
@@ -123,7 +120,7 @@ spec:
         }
         EOL
 
-        for varfile in /var/workdir/vars/*; do
+        for varfile in $(workspaces.source.path)/vars/*; do
           echo "Reading $varfile"
           source $varfile
 
