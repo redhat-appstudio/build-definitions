@@ -18,6 +18,10 @@ spec:
       description: Path to the oci copy file.
       name: OCI_COPY_FILE
       type: string
+    - name: BEARER_TOKEN_SECRET_NAME
+      description: Name of a secret which will be made available to the build as an Authorization header
+      type: string
+      default: ""
   results:
     - description: Digest of the artifact just pushed
       name: IMAGE_DIGEST
@@ -71,16 +75,33 @@ spec:
         capabilities:
           add:
             - SETFCAP
+      env:
+      - name: BEARER_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: $(params.BEARER_TOKEN_SECRET_NAME)
+            key: token
+            optional: true
       script: |
-        set -eu
+        set -e
         set -o pipefail
+
+        CURL_ARGS=()
+        if [ -n "${BEARER_TOKEN}" ]; then
+          echo "Found bearer token. Using it for authentication."
+          CURL_ARGS+=(-H "Authorization: Bearer ${BEARER_TOKEN}")
+        else
+          echo "Proceeding with anonymous requests"
+        fi
+
+        set -u
 
         for varfile in /var/workdir/vars/*; do
           echo "Reading $varfile"
           source $varfile
 
           echo "Downloading $OCI_SOURCE to $OCI_FILENAME"
-          curl --silent --show-error --location $OCI_SOURCE -o $OCI_FILENAME
+          curl "${CURL_ARGS[@]}" --silent --show-error --location $OCI_SOURCE -o $OCI_FILENAME
 
           echo "Confirming that digest of $OCI_FILENAME matches expected $OCI_ARTIFACT_DIGEST"
           echo "$OCI_ARTIFACT_DIGEST $OCI_FILENAME" | sha256sum --check
