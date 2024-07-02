@@ -101,13 +101,9 @@ spec:
     name: ADD_CAPABILITIES
     type: string
   - default: "false"
-    description: Squash new layers added as a part of this build, as per --squash
-    name: SQUASH
-    type: string
-  - default: "false"
     description: Squash all new and previous layers added as a part of this build,
-      as per --squash-all
-    name: SQUASH_ALL
+      as per --squash
+    name: SQUASH
     type: string
   - description: The platform to build on
     name: PLATFORM
@@ -162,8 +158,6 @@ spec:
       value: $(params.ADD_CAPABILITIES)
     - name: SQUASH
       value: $(params.SQUASH)
-    - name: SQUASH_ALL
-      value: $(params.SQUASH_ALL)
     - name: BUILDER_IMAGE
       value: quay.io/redhat-appstudio/buildah:v1.31.0@sha256:34f12c7b72ec2c28f1ded0c494b428df4791c909f1f174dd21b8ed6a57cf5ddb
     volumeMounts:
@@ -302,10 +296,6 @@ spec:
         BUILDAH_ARGS+=("--squash")
       fi
 
-      if [ "${SQUASH_ALL}" == "true" ]; then
-        BUILDAH_ARGS+=("--squash-all")
-      fi
-
       if [ -f "$(workspaces.source.path)/cachi2/cachi2.env" ]; then
         cp -r "$(workspaces.source.path)/cachi2" /tmp/
         chmod -R go+rwX /tmp/cachi2
@@ -399,7 +389,6 @@ spec:
        -e BUILD_ARGS_FILE="$BUILD_ARGS_FILE" \
        -e ADD_CAPABILITIES="$ADD_CAPABILITIES" \
        -e SQUASH="$SQUASH" \
-       -e SQUASH_ALL="$SQUASH_ALL" \
        -e COMMIT_SHA="$COMMIT_SHA" \
        -v "$BUILD_DIR/workspaces/source:$(workspaces.source.path):Z" \
        -v "$BUILD_DIR/volumes/shared:/shared:Z" \

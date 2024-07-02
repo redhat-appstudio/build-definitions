@@ -77,13 +77,9 @@ spec:
     name: SOURCE_ARTIFACT
     type: string
   - default: "false"
-    description: Squash new layers added as a part of this build, as per --squash
-    name: SQUASH
-    type: string
-  - default: "false"
     description: Squash all new and previous layers added as a part of this build,
-      as per --squash-all
-    name: SQUASH_ALL
+      as per --squash
+    name: SQUASH
     type: string
   - default: ""
     description: Target stage in Dockerfile to build. If not specified, the Dockerfile
@@ -153,8 +149,6 @@ spec:
       value: $(params.IMAGE_EXPIRES_AFTER)
     - name: SQUASH
       value: $(params.SQUASH)
-    - name: SQUASH_ALL
-      value: $(params.SQUASH_ALL)
     - name: STORAGE_DRIVER
       value: vfs
     - name: TARGET_STAGE
@@ -310,10 +304,6 @@ spec:
         BUILDAH_ARGS+=("--squash")
       fi
 
-      if [ "${SQUASH_ALL}" == "true" ]; then
-        BUILDAH_ARGS+=("--squash-all")
-      fi
-
       if [ -f "/var/workdir/cachi2/cachi2.env" ]; then
         cp -r "/var/workdir/cachi2" /tmp/
         chmod -R go+rwX /tmp/cachi2
@@ -400,7 +390,6 @@ spec:
        -e IMAGE="$IMAGE" \
        -e IMAGE_EXPIRES_AFTER="$IMAGE_EXPIRES_AFTER" \
        -e SQUASH="$SQUASH" \
-       -e SQUASH_ALL="$SQUASH_ALL" \
        -e STORAGE_DRIVER="$STORAGE_DRIVER" \
        -e TARGET_STAGE="$TARGET_STAGE" \
        -e TLSVERIFY="$TLSVERIFY" \

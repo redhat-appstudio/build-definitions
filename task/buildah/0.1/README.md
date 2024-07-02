@@ -25,8 +25,7 @@ When prefetch-dependencies task was activated it is using its artifacts to run b
 |ENTITLEMENT_SECRET|Name of secret which contains the entitlement certificates|etc-pki-entitlement|false|
 |BUILD_ARGS|Array of --build-arg values ("arg=value" strings)|[]|false|
 |BUILD_ARGS_FILE|Path to a file with build arguments, see https://www.mankier.com/1/buildah-build#--build-arg-file|""|false|
-|SQUASH|Squash new layers added as a part of this build, as per --squash|false|false|
-|SQUASH_ALL|Squash all new and previous layers added as a part of this build, as per --squash-all|false|false|
+|SQUASH|Squash all new and previous layers added as a part of this build, as per --squash|false|false|
 
 ## Results
 |name|description|

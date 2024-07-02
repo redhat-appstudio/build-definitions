@@ -77,13 +77,8 @@ spec:
         the application source code.
       type: string
     - name: SQUASH
-      description: Squash new layers added as a part of this build, as per
-        --squash
-      type: string
-      default: "false"
-    - name: SQUASH_ALL
       description: Squash all new and previous layers added as a part of this
-        build, as per --squash-all
+        build, as per --squash
       type: string
       default: "false"
     - name: TARGET_STAGE
@@ -170,8 +165,6 @@ spec:
         value: $(params.IMAGE_EXPIRES_AFTER)
       - name: SQUASH
         value: $(params.SQUASH)
-      - name: SQUASH_ALL
-        value: $(params.SQUASH_ALL)
       - name: STORAGE_DRIVER
         value: vfs
       - name: TARGET_STAGE
@@ -287,10 +280,6 @@ spec:
 
         if [ "${SQUASH}" == "true" ]; then
           BUILDAH_ARGS+=("--squash")
-        fi
-
-        if [ "${SQUASH_ALL}" == "true" ]; then
-          BUILDAH_ARGS+=("--squash-all")
         fi
 
         if [ -f "/var/workdir/cachi2/cachi2.env" ]; then
