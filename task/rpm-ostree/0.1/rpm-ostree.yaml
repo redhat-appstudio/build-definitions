@@ -121,6 +121,7 @@ spec:
       ssh $SSH_ARGS "$SSH_HOST"  mkdir -p "$BUILD_DIR/workspaces" "$BUILD_DIR/scripts" "$BUILD_DIR/tmp"
 
       rsync -ra $(workspaces.source.path)/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
+      rsync -ra "$HOME/.docker/" "$SSH_HOST:$BUILD_DIR/.docker/"
       cat >scripts/script-build.sh <<'REMOTESSHEOF'
       #!/bin/sh
       set -o verbose
@@ -173,6 +174,7 @@ spec:
           -e COMMIT_SHA="$COMMIT_SHA" \
           --rm \
           -v "$BUILD_DIR/workspaces/source:$(workspaces.source.path):Z" \
+          -v "$BUILD_DIR/.docker/:/root/.docker:Z" \
           -v $BUILD_DIR/scripts:/script:Z \
           --user=0 \
           --entrypoint bash \
