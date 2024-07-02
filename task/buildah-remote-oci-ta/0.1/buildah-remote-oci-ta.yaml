@@ -229,10 +229,19 @@ spec:
       rsync -ra /mnt/trusted-ca/ "$SSH_HOST:$BUILD_DIR/volumes/trusted-ca/"
       rsync -ra "$HOME/.docker/" "$SSH_HOST:$BUILD_DIR/.docker/"
       rsync -ra "/tekton/results/" "$SSH_HOST:$BUILD_DIR/tekton-results/"
+
+      ENTITLEMENT_PATH="/entitlement"
+      if [ -d "$ENTITLEMENT_PATH" ]; then
+        ssh $SSH_ARGS "$SSH_HOST"  mkdir -p "$BUILD_DIR/entitlement"
+        rsync -raL "/entitlement" "$SSH_HOST:$BUILD_DIR"
+        ENTITLEMENT_VOLUME=" -v $BUILD_DIR/entitlement:/entitlement:Z "
+      fi
+
       cat >scripts/script-build.sh <<'REMOTESSHEOF'
       #!/bin/bash
       set -o verbose
       set -e
+      env
       cd /var/workdir
       ca_bundle=/mnt/trusted-ca/ca-bundle.crt
       if [ -f "$ca_bundle" ]; then
@@ -350,11 +359,10 @@ spec:
       [ -n "$COMMIT_SHA" ] && LABELS+=("--label" "vcs-ref=$COMMIT_SHA")
       [ -n "$IMAGE_EXPIRES_AFTER" ] && LABELS+=("--label" "quay.expires-after=$IMAGE_EXPIRES_AFTER")
 
-      ENTITLEMENT_PATH="/entitlement"
+      ENTITLEMENT_PATH="/entitlement"  # this is now mounted by podman run when present in VM
       if [ -d "$ENTITLEMENT_PATH" ]; then
         cp -r --preserve=mode "$ENTITLEMENT_PATH" /tmp/entitlement
-        VOLUME_MOUNTS="${VOLUME_MOUNTS} --volume /tmp/entitlement:/etc/pki/entitlement"
-        echo "Adding the entitlement to the build"
+        VOLUME_MOUNTS="${VOLUME_MOUNTS} --volume /tmp/entitlement:/etc/pki/entitlement""
       fi
 
       unshare -Uf $UNSHARE_ARGS --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -w ${SOURCE_CODE_DIR}/$CONTEXT -- buildah build \
@@ -415,6 +423,7 @@ spec:
        -v "$BUILD_DIR/.docker/:/root/.docker:Z" \
        -v "$BUILD_DIR/tekton-results/:/tekton/results:Z" \
        -v $BUILD_DIR/scripts:/script:Z \
+       $ENTITLEMENT_VOLUME \
       --user=0  --rm  "$BUILDER_IMAGE" /script/script-build.sh
       rsync -ra "$SSH_HOST:$BUILD_DIR/volumes/shared/" /shared/
       rsync -ra "$SSH_HOST:$BUILD_DIR/volumes/workdir/" /var/workdir/
