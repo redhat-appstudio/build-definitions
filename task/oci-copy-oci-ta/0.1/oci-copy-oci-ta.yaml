@@ -34,8 +34,6 @@ spec:
       emptyDir: {}
     - name: workdir
       emptyDir: {}
-    - name: workdir
-      emptyDir: {}
   stepTemplate:
     env:
       - name: IMAGE
@@ -43,8 +41,6 @@ spec:
       - name: OCI_COPY_FILE
         value: $(params.OCI_COPY_FILE)
     volumeMounts:
-      - mountPath: /var/workdir
-        name: workdir
       - mountPath: /var/workdir
         name: workdir
   steps:
