@@ -53,7 +53,7 @@ spec:
         - $(params.SOURCE_ARTIFACT)=/var/workdir/source
         - $(params.CACHI2_ARTIFACT)=/var/workdir/cachi2
     - name: build
-      image: quay.io/redhat-appstudio/build-definitions-source-image-build-utils@sha256:0d199c56ed01b88f8a7d244742989bfc63980e8624cc6cc8f792d79f6ece40be
+      image: quay.io/konflux-ci/source-container-build:9ad131acf5154d2f280b7b46a1abc543952d325c@sha256:94271c32e4578208ac90308695d2b625d4e932d65f0cdd116b200c39228f5ece
       workingDir: /var/workdir
       env:
         - name: BINARY_IMAGE
