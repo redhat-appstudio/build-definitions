@@ -78,6 +78,11 @@ spec:
     description: Name of secret which contains the entitlement certificates
     name: ENTITLEMENT_SECRET
     type: string
+  - default: does-not-exist
+    description: Name of a secret which will be made available to the build with 'buildah
+      build --secret' at /run/secrets/$ADDITIONAL_SECRET
+    name: ADDITIONAL_SECRET
+    type: string
   - default: []
     description: Array of --build-arg values ("arg=value" strings)
     name: BUILD_ARGS
@@ -156,6 +161,8 @@ spec:
       value: $(params.BUILDER_IMAGE)
     - name: ENTITLEMENT_SECRET
       value: $(params.ENTITLEMENT_SECRET)
+    - name: ADDITIONAL_SECRET
+      value: $(params.ADDITIONAL_SECRET)
     - name: BUILD_ARGS_FILE
       value: $(params.BUILD_ARGS_FILE)
     - name: ADD_CAPABILITIES
@@ -214,6 +221,7 @@ spec:
       rsync -ra $(workspaces.source.path)/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
       rsync -ra /shared/ "$SSH_HOST:$BUILD_DIR/volumes/shared/"
       rsync -ra /entitlement/ "$SSH_HOST:$BUILD_DIR/volumes/etc-pki-entitlement/"
+      rsync -ra /additional-secret/ "$SSH_HOST:$BUILD_DIR/volumes/additional-secret/"
       rsync -ra /mnt/trusted-ca/ "$SSH_HOST:$BUILD_DIR/volumes/trusted-ca/"
       rsync -ra "$HOME/.docker/" "$SSH_HOST:$BUILD_DIR/.docker/"
       rsync -ra "/tekton/results/" "$SSH_HOST:$BUILD_DIR/tekton-results/"
@@ -349,6 +357,13 @@ spec:
         echo "Adding the entitlement to the build"
       fi
 
+      ADDITIONAL_SECRET_PATH="/additional-secret"
+      if [ -d "$ADDITIONAL_SECRET_PATH" ]; then
+        cp -r --preserve=mode "$ADDITIONAL_SECRET_PATH" /tmp/additional-secret
+        BUILDAH_ARGS+=("--secret=id=${ADDITIONAL_SECRET},src=/tmp/additional-secret")
+        echo "Adding the secret ${ADDITIONAL_SECRET} to the build, available at /run/secrets/${ADDITIONAL_SECRET}"
+      fi
+
       unshare -Uf $UNSHARE_ARGS --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -w ${SOURCE_CODE_DIR}/$CONTEXT -- buildah build \
         $VOLUME_MOUNTS \
         "${BUILDAH_ARGS[@]}" \
@@ -396,6 +411,7 @@ spec:
        -e TARGET_STAGE="$TARGET_STAGE" \
        -e PARAM_BUILDER_IMAGE="$PARAM_BUILDER_IMAGE" \
        -e ENTITLEMENT_SECRET="$ENTITLEMENT_SECRET" \
+       -e ADDITIONAL_SECRET="$ADDITIONAL_SECRET" \
        -e BUILD_ARGS_FILE="$BUILD_ARGS_FILE" \
        -e ADD_CAPABILITIES="$ADD_CAPABILITIES" \
        -e SQUASH="$SQUASH" \
@@ -404,6 +420,7 @@ spec:
        -v "$BUILD_DIR/workspaces/source:$(workspaces.source.path):Z" \
        -v "$BUILD_DIR/volumes/shared:/shared:Z" \
        -v "$BUILD_DIR/volumes/etc-pki-entitlement:/entitlement:Z" \
+       -v "$BUILD_DIR/volumes/additional-secret:/additional-secret:Z" \
        -v "$BUILD_DIR/volumes/trusted-ca:/mnt/trusted-ca:Z" \
        -v "$BUILD_DIR/.docker/:/root/.docker:Z" \
        -v "$BUILD_DIR/tekton-results/:/tekton/results:Z" \
@@ -427,6 +444,8 @@ spec:
       name: varlibcontainers
     - mountPath: /entitlement
       name: etc-pki-entitlement
+    - mountPath: /additional-secret
+      name: additional-secret
     - mountPath: /mnt/trusted-ca
       name: trusted-ca
       readOnly: true
@@ -608,6 +627,10 @@ spec:
     secret:
       optional: true
       secretName: $(params.ENTITLEMENT_SECRET)
+  - name: additional-secret
+    secret:
+      optional: true
+      secretName: $(params.ADDITIONAL_SECRET)
   - configMap:
       items:
       - key: $(params.caTrustConfigMapKey)

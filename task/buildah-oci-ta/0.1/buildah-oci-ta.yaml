@@ -16,6 +16,11 @@ spec:
     When [Java dependency rebuild](https://redhat-appstudio.github.io/docs.stonesoup.io/Documentation/main/cli/proc_enabled_java_dependencies.html) is enabled it triggers rebuilds of Java artifacts.
     When prefetch-dependencies task was activated it is using its artifacts to run build in hermetic environment.
   params:
+    - name: ADDITIONAL_SECRET
+      description: Name of a secret which will be made available to the build
+        with 'buildah build --secret' at /run/secrets/$ADDITIONAL_SECRET
+      type: string
+      default: does-not-exist
     - name: ADD_CAPABILITIES
       description: Comma separated list of extra capabilities to add when
         running 'buildah build'
@@ -131,6 +136,10 @@ spec:
       description: The counting of Java components by publisher in JSON format
       type: string
   volumes:
+    - name: additional-secret
+      secret:
+        optional: true
+        secretName: $(params.ADDITIONAL_SECRET)
     - name: etc-pki-entitlement
       secret:
         optional: true
@@ -150,6 +159,8 @@ spec:
       emptyDir: {}
   stepTemplate:
     env:
+      - name: ADDITIONAL_SECRET
+        value: $(params.ADDITIONAL_SECRET)
       - name: ADD_CAPABILITIES
         value: $(params.ADD_CAPABILITIES)
       - name: BUILDAH_FORMAT
@@ -206,6 +217,8 @@ spec:
           name: varlibcontainers
         - mountPath: /entitlement
           name: etc-pki-entitlement
+        - mountPath: /additional-secret
+          name: additional-secret
         - mountPath: /mnt/trusted-ca
           name: trusted-ca
           readOnly: true
@@ -334,6 +347,13 @@ spec:
           cp -r --preserve=mode "$ENTITLEMENT_PATH" /tmp/entitlement
           VOLUME_MOUNTS="${VOLUME_MOUNTS} --volume /tmp/entitlement:/etc/pki/entitlement"
           echo "Adding the entitlement to the build"
+        fi
+
+        ADDITIONAL_SECRET_PATH="/additional-secret"
+        if [ -d "$ADDITIONAL_SECRET_PATH" ]; then
+          cp -r --preserve=mode "$ADDITIONAL_SECRET_PATH" /tmp/additional-secret
+          BUILDAH_ARGS+=("--secret=id=${ADDITIONAL_SECRET},src=/tmp/additional-secret")
+          echo "Adding the secret ${ADDITIONAL_SECRET} to the build, available at /run/secrets/${ADDITIONAL_SECRET}"
         fi
 
         unshare -Uf $UNSHARE_ARGS --keep-caps -r --map-users 1,1,65536 --map-groups 1,1,65536 -w ${SOURCE_CODE_DIR}/$CONTEXT -- buildah build \
