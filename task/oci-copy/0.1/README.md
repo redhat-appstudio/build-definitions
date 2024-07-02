@@ -11,6 +11,7 @@ It is not to be considered safe for general use as it cannot provide a high degr
 |---|---|---|---|
 |IMAGE|Reference of the image buildah will produce.||true|
 |OCI_COPY_FILE|Path to the oci copy file.|./oci-copy.yaml|false|
+|BEARER_TOKEN_SECRET_NAME|Name of a secret which will be made available to the build as an Authorization header|""|false|
 
 ## Results
 |name|description|

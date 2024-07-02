@@ -13,6 +13,11 @@ spec:
   description: Given a file in the user's source directory, copy content from
     arbitrary urls into the OCI registry.
   params:
+    - name: BEARER_TOKEN_SECRET_NAME
+      description: Name of a secret which will be made available to the build
+        as an Authorization header
+      type: string
+      default: ""
     - name: IMAGE
       description: Reference of the image we will push
       type: string
@@ -85,16 +90,33 @@ spec:
       volumeMounts:
         - mountPath: /var/lib/containers
           name: varlibcontainers
+      env:
+        - name: BEARER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: token
+              name: $(params.BEARER_TOKEN_SECRET_NAME)
+              optional: true
       script: |
-        set -eu
+        set -e
         set -o pipefail
+
+        CURL_ARGS=()
+        if [ -n "${BEARER_TOKEN}" ]; then
+          echo "Found bearer token. Using it for authentication."
+          CURL_ARGS+=(-H "Authorization: Bearer ${BEARER_TOKEN}")
+        else
+          echo "Proceeding with anonymous requests"
+        fi
+
+        set -u
 
         for varfile in /var/workdir/vars/*; do
           echo "Reading $varfile"
           source $varfile
 
           echo "Downloading $OCI_SOURCE to $OCI_FILENAME"
-          curl --silent --show-error --location $OCI_SOURCE -o $OCI_FILENAME
+          curl "${CURL_ARGS[@]}" --silent --show-error --location $OCI_SOURCE -o $OCI_FILENAME
 
           echo "Confirming that digest of $OCI_FILENAME matches expected $OCI_ARTIFACT_DIGEST"
           echo "$OCI_ARTIFACT_DIGEST $OCI_FILENAME" | sha256sum --check
