@@ -48,7 +48,7 @@ spec:
           --workdir "${WORKDIR}" \
           --status-path "${WORKDIR}"/status
     - name: output-results
-      image: quay.io/redhat-appstudio/konflux-test:v1.4.3@sha256:75d3e0ada1d07511e6b9342398929fe2690367b33142bf99ecad7dc3bccc3847
+      image: quay.io/redhat-appstudio/konflux-test:v1.4.0@sha256:54d49b37c9a2e280d42961a57e4f7a16c171d6b065559f1329b548db85300bea
       volumeMounts:
         - name: workdir
           mountPath: "$(params.WORKDIR)"
