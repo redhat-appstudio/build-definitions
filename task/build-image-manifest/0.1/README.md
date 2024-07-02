@@ -1,6 +1,6 @@
 # build-image-manifest task
 
-This task generates an image manifest from a collection of existing single platform images to create a multi-platform image.
+This task generates an image index from a collection of existing single platform images to create a multi-platform image.
 
 ## Parameters
 | name                | description                                                                                                                                                        |default value|required|
