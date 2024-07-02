@@ -15,7 +15,7 @@ REF=temp-$(openssl rand -base64 12)
 git fetch origin "${GITHUB_BASE_REF:-main}:${REF}" >/dev/null 2>&1
 function cleanup() {
     # shellcheck disable=SC2317
-    git branch --delete "${REF}" >/dev/null 2>&1 || true
+    git branch -D "${REF}" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 readarray CHANGED_FILES < <({ if [[ -n "${GITHUB_ACTIONS:-}" ]]; then git diff HEAD~1 --name-only; else git diff .."${REF}" --name-only; git status --porcelain=v1 | cut -c 4-; fi; }| uniq)

@@ -69,17 +69,62 @@ spec:
 
       sed -i 's/^\s*short-name-mode\s*=\s*.*/short-name-mode = "disabled"/' /etc/containers/registries.conf
 
-      buildah manifest create "$IMAGE"
-      for i in $@
-      do
-        TOADD="$i"
-        if [[ $(echo $i | tr -cd ":" | wc -c) == 2 ]]; then
-          #we need to remove the tag, and just reference the digest
-          #as tag + digest is not supported
-          TOADD="$(echo $i | cut -d: -f1)@sha256:$(echo $i | cut -d: -f3)"
+      buildah manifest create "${IMAGE}"
+
+      # collect arguments in two arrays, one containing images with digests and
+      # one containing only digests, it is expected that all images without
+      # digests are followed with their digests in the same exact order, this
+      # aligns with how Tekton results from matrix Tasks are provided, e.g.
+      # given args as:
+      # - $(tasks.build-container-amd64.results.IMAGE_URL)@$(tasks.build-container-amd64.results.IMAGE_DIGEST)
+      # - $(tasks.build-container-multiarch.results.IMAGE_URL[*])
+      # - $(tasks.build-container-multiarch.results.IMAGE_DIGEST[*])
+      # the substitution should provide the args value as:
+      # - registry.io/repository/image-amd64@sha256:...
+      # - registry.io/repository/image-arm64
+      # - registry.io/repository/image-ppc64le
+      # - ...
+      # - @sha256:[arm64]
+      # - @sha256:[ppc64le]
+      # - ...
+      # The order is guaranteed because Tekton sorts by TaskRun name before
+      # performing the substitution
+      images=()
+      digests=()
+      for i in "$@"; do
+        [[ "$i" == @* ]] && digests+=("$i") || images+=("$i")
+      done
+
+      declare -i digest_idx=0
+      for i in "${images[@]}"; do
+        TOADD="${i}"
+        # check if the image reference contains both the tag and the digest,
+        # making sure that any port in the authority part of the image reference
+        # URI is not considered to be part of the tag by looking at the colon
+        # present after the slash
+        if [[ "${TOADD}" == */*:*@sha*:* ]]; then
+          # we need to remove the tag, and just reference the digest
+          # as tag + digest is not supported
+          # first substitution removes the suffix starting from the last colon
+          # before the "@sha*" sequence; the second substitution removes
+          # everything up to the "@" character
+          TOADD="${TOADD%:*@sha*}@${TOADD#*@}"
+        elif [[ ! "${TOADD}" == */*@sha*:* ]]; then
+          # the digest was not provided
+
+          # strip the tag if it is present, tag needs to be after the slash
+          # character so we do not remove from the port in the authority part of
+          # the URI
+          if [[ "${TOADD}" == */*:* ]]; then
+            TOADD="${TOADD%:*}"
+          fi
+
+          # expect the next digest argument to contain the digest for this image
+          TOADD="${TOADD}${digests[digest_idx]}"
+          digest_idx=$((digest_idx+1))
         fi
-        echo "Adding $TOADD"
-        buildah manifest add $IMAGE "docker://$TOADD"
+        echo "Adding ${TOADD}"
+        buildah manifest add "${IMAGE}" "docker://${TOADD}"
       done
 
       status=-1
@@ -90,17 +135,17 @@ spec:
         [ "$run" -gt 1 ] && sleep $sleep_sec
         echo "Pushing image to registry"
         buildah manifest push \
-          --tls-verify=$TLSVERIFY \
-          --digestfile image-digest $IMAGE \
-          docker://$IMAGE && break || status=$?
+          --tls-verify="${TLSVERIFY}" \
+          --digestfile image-digest "${IMAGE}" \
+          "docker://${IMAGE}" && break || status=$?
       done
       if [ "$status" -ne 0 ]; then
           echo "Failed to push image to registry after ${max_run} tries"
           exit 1
       fi
 
-      cat image-digest | tee $(results.IMAGE_DIGEST.path)
-      echo -n "$IMAGE" | tee $(results.IMAGE_URL.path)
+      cat image-digest | tee "$(results.IMAGE_DIGEST.path)"
+      echo -n "${IMAGE}" | tee "$(results.IMAGE_URL.path)"
     securityContext:
       capabilities:
         add:
