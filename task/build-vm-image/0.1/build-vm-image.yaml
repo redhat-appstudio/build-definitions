@@ -1,0 +1,237 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-vm-image
+spec:
+  params:
+    - description: The platform to build on
+      name: PLATFORM
+      type: string
+    - name: OUTPUT_IMAGE
+      type: string
+      description: The output manifest list that points to the OCI artifact of the zipped ZM image
+    - name: SOURCE_ARTIFACT
+      type: string
+    - name: IMAGE_TYPE
+      type: string
+      description: The type of VM image to build, valid values are iso, qcow2 and raw
+    - name: BIB_CONFIG_FILE
+      default: bib.yaml
+      type: string
+      description: The config file specifying what to build and the builder to build it with
+    - default: etc-pki-entitlement
+      description: Name of secret which contains the entitlement certificates
+      name: ENTITLEMENT_SECRET
+      type: string 
+  results:
+    - description: Digest of the manifest list just built
+      name: IMAGE_DIGEST
+    - description: Image repository where the built manifest list was pushed
+      name: IMAGE_URL
+  stepTemplate:
+    env:
+      - name: OUTPUT_IMAGE
+        value: $(params.OUTPUT_IMAGE)
+      - name: BIB_CONFIG_FILE
+        value: $(params.BIB_CONFIG_FILE)
+      - name: IMAGE_TYPE
+        value: $(params.IMAGE_TYPE)
+      - name: ENTITLEMENT_SECRET
+        value: $(params.ENTITLEMENT_SECRET)
+
+    volumeMounts:
+      - mountPath: "/var/workdir"
+        name: workdir
+      - mountPath: "/var/lib/containers/storage"
+        name: varlibcontainers
+  steps:
+    - name: use-trusted-artifact
+      image: quay.io/redhat-appstudio/build-trusted-artifacts:latest@sha256:4e39fb97f4444c2946944482df47b39c5bbc195c54c6560b0647635f553ab23d
+      args:
+        - use
+        - $(params.SOURCE_ARTIFACT)=/var/workdir/source
+    - name: validate-bib-config
+      image: quay.io/konflux-ci/yq@sha256:974dea6375ee9df561ffd3baf994db2b61777a71f3bcf0050c5dca91ac9b3430
+      script: |-
+        #!/bin/bash
+        set -o verbose
+        set -e
+        set -x
+
+        # expects a config file like the following as BIB_CONFIG_FILE
+        #
+        echo -e "BIB_CONFIG_FILE: $BIB_CONFIG_FILE"
+        # # BIB: Bootc Image Builder config
+        # bootc-builder-image: "quay.io/centos-bootc/bootc-image-builder:latest"
+        # source-image: "quay.io/centos-bootc/centos-bootc:stream9"
+
+        # trim any leading slash.
+        BIB_CONFIG_FILE=${BIB_CONFIG_FILE#/}
+
+        BIB_IMAGE=$(yq -r .bootc-builder-image /var/workdir/source/$BIB_CONFIG_FILE)
+        SOURCE_IMAGE=$(yq -r  .source-image /var/workdir/source/$BIB_CONFIG_FILE)
+
+        # write values to a file in the workspace
+        echo "declare BOOTC_BUILDER_IMAGE=${BIB_IMAGE}" > /var/workdir/vars
+        echo "declare SOURCE_IMAGE=${SOURCE_IMAGE}" >> /var/workdir/vars
+
+        # here we should validate that both keys exist and are valid pullspecs.
+        # todo
+
+    - name: build
+      image: quay.io/redhat-appstudio/multi-platform-runner:01c7670e81d5120347cf0ad13372742489985e5f@sha256:246adeaaba600e207131d63a7f706cffdcdc37d8f600c56187123ec62823ff44
+      computeResources:
+        limits:
+          memory: 512Mi
+        requests:
+          cpu: 250m
+          memory: 128Mi
+      script: |-
+        #!/bin/bash
+        set -o verbose
+        set -eu
+        set -x
+
+        # get values stored from previous task
+        echo "vars file"
+        cat /var/workdir/vars
+        source /var/workdir/vars
+        echo "Vars:"
+        echo BOOTC_BUILDER_IMAGE $BOOTC_BUILDER_IMAGE
+        echo SOURCE_IMAGE $SOURCE_IMAGE
+
+        mkdir -p ~/.ssh
+        if [ -e "/ssh/error" ]; then
+          #no server could be provisioned
+          cat /ssh/error
+          exit 1
+        elif [ -e "/ssh/otp" ]; then
+          curl --cacert /ssh/otp-ca -XPOST -d @/ssh/otp $(cat /ssh/otp-server) >~/.ssh/id_rsa
+          echo "" >> ~/.ssh/id_rsa
+        else
+          cp /ssh/id_rsa ~/.ssh
+        fi
+        chmod 0400 ~/.ssh/id_rsa
+        export SSH_HOST=$(cat /ssh/host)
+        export BUILD_DIR=$(cat /ssh/user-dir)
+        export SSH_ARGS="-o StrictHostKeyChecking=no -o ServerAliveInterval=60"
+        mkdir -p scripts
+        echo "$BUILD_DIR"
+        ssh -v $SSH_ARGS "$SSH_HOST"  mkdir -p "$BUILD_DIR/workspaces" "$BUILD_DIR/scripts" "$BUILD_DIR/tmp" "$BUILD_DIR/tekton-results" "$BUILD_DIR/entitlement"
+
+        rsync -ra "$HOME/.docker/" "$SSH_HOST:$BUILD_DIR/.docker/"
+        rsync -ra /entitlement/ "$SSH_HOST:$BUILD_DIR/entitlement/"
+
+        # form the --type arguments
+        IMAGE_TYPES=" --type $IMAGE_TYPE "
+
+        # this heredoc allows expansions for the image name
+        cat >scripts/script-build.sh <<REMOTESSHEOF
+        #!/bin/sh
+        set -e
+
+        # this prevents the container from using podman-subscripition-mananger magic,
+        # so that it will use certificates from /etc/pki/entitlements 
+        sudo rm /usr/share/containers/mounts.conf
+
+        export BUILD_DIR="$BUILD_DIR"
+        export OUTPUT_IMAGE="$OUTPUT_IMAGE"
+        export BOOTC_BUILDER_IMAGE="$BOOTC_BUILDER_IMAGE"
+        export SOURCE_IMAGE="$SOURCE_IMAGE"
+        export IMAGE_TYPES="$IMAGE_TYPES"
+
+        REMOTESSHEOF
+
+        # no expansions in this one, the env vars are evaluated on the remote vm
+        cat >>scripts/script-build.sh <<'REMOTESSHEOF'
+        echo >config.toml <<EOF
+        [[blueprint.customizations.user]]
+        name = "user"
+        password = "pass"
+        groups = ["wheel"]
+        EOF
+
+        mkdir output
+        echo "PULLING BUILDER IMAGE"
+        time sudo podman pull --authfile=$BUILD_DIR/.docker/config.json $BOOTC_BUILDER_IMAGE
+        echo "PULLING IMAGE"
+        time sudo podman pull --authfile=$BUILD_DIR/.docker/config.json $SOURCE_IMAGE
+        echo "RUNNING BUILD"
+        echo -e "IMAGE_TYPES = $IMAGE_TYPES"
+
+        time sudo podman run --authfile=$BUILD_DIR/.docker/config.json --rm -it --privileged --pull=newer --security-opt label=type:unconfined_t \
+          -v $(pwd)/config.toml:/config.toml -v $(pwd)/output:/output \
+          -v /var/lib/containers/storage:/var/lib/containers/storage \
+          -v $BUILD_DIR/entitlement:/etc/pki/entitlement:Z \
+          $BOOTC_BUILDER_IMAGE $IMAGE_TYPES --local $SOURCE_IMAGE
+
+        # This script is currently using fedora image because buildah in UBI9 does not have the OCI support (no --artifact* switches)
+        time sudo podman run --authfile=$BUILD_DIR/.docker/config.json --rm -it --privileged --pull=newer --security-opt label=type:unconfined_t \
+          -v $BUILD_DIR/.docker:/.docker -v $(pwd)/output:/output \
+          -v /var/lib/containers/storage:/var/lib/containers/storage \
+          -v $BUILD_DIR/scripts/script-push.sh:/script-push.sh \
+          -v $BUILD_DIR/tekton-results:/tekton-results \
+          registry.fedoraproject.org/fedora \
+          /script-push.sh
+
+        REMOTESSHEOF
+
+        # script-push.sh script is intended run _inside_ podman on the ssh host and requires sudo
+        cat >scripts/script-push.sh <<REMOTESSHEOF
+        #!/bin/bash
+        set -ex
+        dnf -y install buildah pigz
+        buildah --storage-driver=vfs manifest create "$OUTPUT_IMAGE"
+
+        # show contents of /output
+        ls -alR /output
+
+        if [ -f "/output/qcow2/disk.qcow2" ]; then
+          echo -e "Found qcow2 image."
+          # don't zip qcow2 images, it is already compressed.
+          buildah --storage-driver=vfs manifest add --arch $(arch) --os linux --artifact --artifact-type application/vnd.diskimage.qcow2.gzip $OUTPUT_IMAGE /output/qcow2/disk.qcow2
+        elif [ -f "/output/image/disk.raw" ]; then
+          echo -e "Found raw image."
+          pigz /output/image/disk.raw
+          buildah --storage-driver=vfs manifest add --arch $(arch) --os linux --artifact --artifact-type application/vnd.diskimage.raw.gzip $OUTPUT_IMAGE /output/image/disk.raw.gz
+        elif [ -f "/output/bootiso/install.iso" ]; then
+          echo -e "Found iso image."
+          pigz /output/bootiso/install.iso
+          buildah --storage-driver=vfs manifest add --arch $(arch) --os linux --artifact --artifact-type application/vnd.diskimage.iso.gzip $OUTPUT_IMAGE /output/bootiso/install.iso.gz
+        fi
+        buildah --storage-driver=vfs manifest push --digestfile image-digest --authfile /.docker/config.json --all $OUTPUT_IMAGE
+        echo -n "$OUTPUT_IMAGE" | tee /tekton-results/IMAGE_URL
+        cat image-digest | tee /tekton-results/IMAGE_DIGEST
+        REMOTESSHEOF
+
+
+        # make scripts executable and sync them to the cloud VM.
+
+        chmod +x scripts/script-build.sh
+        chmod +x scripts/script-push.sh
+        rsync -ra scripts "$SSH_HOST:$BUILD_DIR"
+        rsync -ra /var/workdir/source/ "$SSH_HOST:$BUILD_DIR/workspaces/source/"
+
+        ssh -v $SSH_ARGS "$SSH_HOST" $BUILD_DIR/scripts/script-build.sh
+        rsync -ra "$SSH_HOST:$BUILD_DIR/tekton-results/" "/tekton/results/"
+
+      volumeMounts:
+        - mountPath: /ssh
+          name: ssh
+          readOnly: true
+        - mountPath: /entitlement
+          name: etc-pki-entitlement
+
+  volumes:
+    - emptyDir: {}
+      name: workdir
+    - emptyDir: {}
+      name: varlibcontainers
+    - name: ssh
+      secret:
+        optional: false
+        secretName: multi-platform-ssh-$(context.taskRun.name)
+    - name: etc-pki-entitlement
+      secret:
+        optional: true
+        secretName: $(params.ENTITLEMENT_SECRET)

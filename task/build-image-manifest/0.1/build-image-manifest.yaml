@@ -79,7 +79,7 @@ spec:
           TOADD="$(echo $i | cut -d: -f1)@sha256:$(echo $i | cut -d: -f3)"
         fi
         echo "Adding $TOADD"
-        buildah manifest add $IMAGE "docker://$TOADD"
+        buildah manifest add $IMAGE "docker://$TOADD" --all
       done
 
       status=-1
