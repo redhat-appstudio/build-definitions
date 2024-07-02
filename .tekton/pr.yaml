@@ -248,6 +248,7 @@ spec:
               image: registry.redhat.io/openshift4/ose-cli:v4.12@sha256:0d21299d2adfa3cb74562c4dffbedd3b107fffac3a2a537f14770088abd4671f
               script: |
                 #!/usr/bin/env bash
+                echo $HI
                 # Perform cleanup of resources created by gitops service
                 oc delete --ignore-not-found deployment --all -n $(params.e2e_test_namespace)
                 oc delete --ignore-not-found eventlisteners --all -n $(params.e2e_test_namespace)

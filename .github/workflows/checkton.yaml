@@ -1,0 +1,29 @@
+name: Checkton
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Differential Checkton requires full git history
+          fetch-depth: 0
+
+      - name: Run Checkton
+        id: checkton
+        uses: chmeliik/checkton@v0.1.2
+        with:
+          fail-on-findings: false
+          find-copies-harder: true
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.checkton.outputs.sarif }}
+          # Avoid clashing with ShellCheck
+          category: checkton
